@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-slate-900 border border-slate-800 rounded-2xl;
+  }
+
+  .card-glow {
+    @apply card shadow-[0_0_30px_-10px] shadow-violet-500/20;
+  }
+
+  .btn-primary {
+    @apply bg-violet-600 hover:bg-violet-500 text-white font-medium px-4 py-2 rounded-xl
+           transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply text-slate-400 hover:text-slate-100 hover:bg-slate-800 px-3 py-2 rounded-lg
+           transition-all duration-150 active:scale-95;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .stat-number {
+    @apply font-mono text-2xl font-bold tabular-nums;
+  }
+
+  .heatmap-cell {
+    @apply rounded-sm transition-all duration-150 cursor-pointer hover:ring-2 hover:ring-violet-400 hover:ring-offset-1 hover:ring-offset-slate-900;
+  }
+
+  .alert-sentinel {
+    @apply border border-red-500/40 bg-red-950/30 rounded-xl p-4;
+  }
+
+  .alert-snooze {
+    @apply border border-amber-500/40 bg-amber-950/20 rounded-xl p-3;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+           transition-all duration-150 cursor-pointer;
+  }
+
+  .nav-item-active {
+    @apply nav-item bg-violet-600/20 text-violet-300 border border-violet-500/20;
+  }
+
+  .nav-item-inactive {
+    @apply nav-item text-slate-400 hover:text-slate-100 hover:bg-slate-800;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent;
+  }
+
+  .value-bar {
+    @apply h-2 rounded-full bg-gradient-to-r from-violet-600 to-violet-400 transition-all duration-700;
+  }
+}
+
+/* Recharts overrides for dark theme */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgb(51 65 85 / 0.5);
+}
+
+.recharts-text {
+  fill: rgb(148 163 184);
+  font-size: 11px;
+}
+
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
