@@ -104,12 +104,12 @@ export function totalMonthlySpend(subscriptions) {
  * Heatmap color intensity class (Tailwind) based on minutes.
  */
 export function heatmapColor(minutes) {
-  if (minutes === 0) return 'bg-slate-800'
-  if (minutes < 20) return 'bg-violet-950'
-  if (minutes < 45) return 'bg-violet-800'
-  if (minutes < 90) return 'bg-violet-600'
-  if (minutes < 150) return 'bg-violet-500'
-  return 'bg-violet-400'
+  if (minutes === 0) return 'bg-gray-100'
+  if (minutes < 20) return 'bg-emerald-200'
+  if (minutes < 45) return 'bg-emerald-400'
+  if (minutes < 90) return 'bg-amber-400'
+  if (minutes < 150) return 'bg-orange-400'
+  return 'bg-pink-500'
 }
 
 /**

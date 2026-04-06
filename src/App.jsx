@@ -91,10 +91,11 @@ export default function App() {
 
 function LoadingScreen() {
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-950">
+    <div className="flex h-screen items-center justify-center">
       <div className="text-center">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 mx-auto mb-4 animate-pulse" />
-        <p className="text-slate-400 text-sm">Loading SubSense...</p>
+        <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-violet-500 via-purple-500 to-pink-500 mx-auto mb-4 animate-bounce shadow-violet" />
+        <p className="text-violet-500 text-sm font-bold font-display">Loading SubSense...</p>
+        <p className="text-gray-400 text-xs mt-1">✨ Crunching your subscription data</p>
       </div>
     </div>
   )
@@ -102,12 +103,12 @@ function LoadingScreen() {
 
 function ErrorScreen({ message }) {
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-950">
-      <div className="card p-8 max-w-md text-center">
-        <p className="text-2xl mb-3">⚠️</p>
-        <p className="text-slate-200 font-semibold mb-2">Could not reach the API</p>
-        <p className="text-slate-500 text-sm font-mono">{message}</p>
-        <p className="text-slate-600 text-xs mt-4">
+    <div className="flex h-screen items-center justify-center">
+      <div className="card p-10 max-w-md text-center">
+        <p className="text-5xl mb-4">😵</p>
+        <p className="font-black font-display text-gray-800 text-lg mb-2">Could not reach the API</p>
+        <p className="text-gray-400 text-sm font-mono bg-gray-50 rounded-xl p-3 mb-4">{message}</p>
+        <p className="text-gray-400 text-xs">
           Make sure the Spring Boot backend is running on port 8080.
         </p>
       </div>

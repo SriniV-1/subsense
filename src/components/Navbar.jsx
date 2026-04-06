@@ -1,22 +1,17 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  Flame,
-  ArrowLeftRight,
-  Bell,
-  Zap,
-  ChevronDown,
-  FlaskConical,
+  LayoutDashboard, Flame, ArrowLeftRight, Bell,
+  Sparkles, FlaskConical,
 } from 'lucide-react'
 import { userProfile } from '../data/mockData.js'
 import { sentinelShouldAlert } from '../utils/calculations.js'
 import clsx from 'clsx'
 
 const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/heatmap', icon: Flame, label: 'Utilization Map' },
-  { to: '/swap', icon: ArrowLeftRight, label: 'Swap Calculator' },
-  { to: '/sentinel', icon: Bell, label: 'AI Sentinel' },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',      color: 'text-violet-600', bg: 'bg-violet-100' },
+  { to: '/heatmap',   icon: Flame,           label: 'Utilization Map', color: 'text-orange-500', bg: 'bg-orange-100' },
+  { to: '/swap',      icon: ArrowLeftRight,  label: 'Swap Calculator', color: 'text-emerald-600',bg: 'bg-emerald-100' },
+  { to: '/sentinel',  icon: Bell,            label: 'AI Sentinel',     color: 'text-pink-600',   bg: 'bg-pink-100' },
 ]
 
 export default function Navbar({ devMode, setDevMode, subscriptions }) {
@@ -25,106 +20,121 @@ export default function Navbar({ devMode, setDevMode, subscriptions }) {
   ).length
 
   const totalSpend = subscriptions.reduce((s, sub) => s + sub.monthlyCost, 0)
+  const budgetPct  = Math.min(100, (totalSpend / userProfile.monthlyBudget) * 100)
 
   return (
-    <aside className="w-64 shrink-0 border-r border-slate-800 bg-slate-950 flex flex-col h-full">
+    <aside className="w-64 shrink-0 border-r border-violet-100 bg-white/80 backdrop-blur-sm flex flex-col h-full">
+
       {/* Logo */}
-      <div className="px-5 pt-6 pb-4 border-b border-slate-800">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/30">
-            <Zap className="w-4 h-4 text-white" fill="white" />
+      <div className="px-5 pt-6 pb-5 border-b border-violet-100">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-violet shrink-0 hover:scale-110 transition-transform duration-300 cursor-pointer">
+            <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-slate-100 leading-none">SubSense</h1>
-            <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-wider">Value Analytics</p>
+            <h1 className="text-lg font-black font-display gradient-text leading-none">SubSense</h1>
+            <p className="text-[10px] text-violet-400 mt-0.5 font-semibold uppercase tracking-widest">Value Analytics</p>
           </div>
         </div>
       </div>
 
-      {/* User */}
-      <div className="px-4 py-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-cyan-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+      {/* User card */}
+      <div className="px-4 py-4 border-b border-violet-100">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-400 to-pink-400 flex items-center justify-center text-xs font-black text-white shrink-0 shadow-sm animate-pulse-soft">
             {userProfile.avatarInitials}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-200 truncate">{userProfile.name}</p>
-            <p className="text-xs text-slate-500 truncate">{userProfile.email}</p>
+            <p className="text-sm font-bold font-display text-gray-800 truncate">{userProfile.name}</p>
+            <p className="text-xs text-gray-400 truncate">{userProfile.email}</p>
           </div>
         </div>
 
-        {/* Spend summary */}
-        <div className="mt-3 bg-slate-800/50 rounded-xl px-3 py-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">Monthly Spend</span>
-            <span className="text-xs font-mono font-semibold text-slate-200">
-              ${totalSpend.toFixed(2)}
-            </span>
+        {/* Budget meter */}
+        <div className="bg-violet-50 rounded-2xl px-3 py-2.5 border border-violet-100">
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="text-[11px] font-semibold text-gray-500">Monthly Spend</span>
+            <span className="text-xs font-bold font-mono text-violet-700">${totalSpend.toFixed(2)}</span>
           </div>
-          <div className="mt-1.5 h-1 bg-slate-700 rounded-full overflow-hidden">
+          <div className="h-2 bg-violet-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-violet-600 to-cyan-500 rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, (totalSpend / userProfile.monthlyBudget) * 100)}%` }}
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${budgetPct}%`,
+                background: budgetPct < 70
+                  ? 'linear-gradient(90deg,#34d399,#6ee7b7)'
+                  : budgetPct < 90
+                  ? 'linear-gradient(90deg,#fbbf24,#f59e0b)'
+                  : 'linear-gradient(90deg,#f87171,#ec4899)',
+              }}
             />
           </div>
-          <p className="text-[10px] text-slate-500 mt-1">
-            Budget: ${userProfile.monthlyBudget}/mo
-          </p>
+          <p className="text-[10px] text-gray-400 mt-1.5">of ${userProfile.monthlyBudget} budget</p>
         </div>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        <p className="text-[10px] uppercase tracking-widest text-slate-600 px-3 mb-2">Modules</p>
-        {navItems.map(({ to, icon: Icon, label }) => (
+        <p className="text-[10px] font-bold uppercase tracking-widest text-violet-300 px-3 mb-3">Modules</p>
+        {navItems.map(({ to, icon: Icon, label, color, bg }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
-              clsx(isActive ? 'nav-item-active' : 'nav-item-inactive')
+              clsx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-semibold font-display transition-all duration-200',
+                isActive
+                  ? `${bg} ${color}`
+                  : 'text-gray-500 hover:bg-violet-50 hover:text-violet-600 hover:translate-x-1'
+              )
             }
           >
-            <Icon className="w-4 h-4 shrink-0" />
-            <span className="flex-1">{label}</span>
-            {label === 'AI Sentinel' && alertCount > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
-                {alertCount}
-              </span>
+            {({ isActive }) => (
+              <>
+                <span className={clsx(
+                  'w-7 h-7 rounded-xl flex items-center justify-center transition-all duration-200',
+                  isActive ? `${bg} ${color}` : 'text-gray-400 group-hover:text-violet-500'
+                )}>
+                  <Icon className="w-4 h-4" />
+                </span>
+                <span className="flex-1">{label}</span>
+                {label === 'AI Sentinel' && alertCount > 0 && (
+                  <span className="bg-gradient-to-r from-rose-500 to-pink-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-bounce">
+                    {alertCount}
+                  </span>
+                )}
+              </>
             )}
           </NavLink>
         ))}
       </nav>
 
-      {/* Dev Mode Toggle */}
-      <div className="px-4 pb-6 pt-3 border-t border-slate-800">
+      {/* Dev mode toggle */}
+      <div className="px-4 pb-6 pt-3 border-t border-violet-100">
         <button
           onClick={() => setDevMode((v) => !v)}
           className={clsx(
-            'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200',
+            'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold font-display border transition-all duration-200',
             devMode
-              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-              : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+              ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-amber'
+              : 'text-gray-400 border-gray-200 hover:border-violet-200 hover:text-violet-500 hover:bg-violet-50'
           )}
         >
           <FlaskConical className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1 text-left">Developer Mode</span>
-          <div
-            className={clsx(
-              'w-7 h-4 rounded-full transition-colors duration-200 relative',
-              devMode ? 'bg-amber-500' : 'bg-slate-700'
-            )}
-          >
-            <div
-              className={clsx(
-                'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform duration-200',
-                devMode ? 'translate-x-3.5' : 'translate-x-0.5'
-              )}
-            />
+          <div className={clsx(
+            'w-8 h-4.5 rounded-full relative transition-all duration-300 flex items-center px-0.5',
+            devMode ? 'bg-amber-400' : 'bg-gray-200'
+          )} style={{ height: '18px' }}>
+            <div className={clsx(
+              'w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-300',
+              devMode ? 'translate-x-3.5' : 'translate-x-0'
+            )} />
           </div>
         </button>
         {devMode && (
-          <p className="text-[10px] text-amber-600 mt-1.5 px-1 leading-snug">
-            Drop usage on AI Sentinel tab to trigger live alerts
+          <p className="text-[10px] text-amber-500 mt-2 px-1 leading-snug font-medium">
+            Drop usage on Sentinel tab to trigger live alerts ✨
           </p>
         )}
       </div>
