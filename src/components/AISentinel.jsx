@@ -388,21 +388,23 @@ export default function AISentinel({
   // ── Portfolio-level insights (local fallback when backend offline) ────────
   const localInsights = useMemo(() => {
     const result = []
+    // Exclude snoozed+invested subs — they're already handled
+    const activeSubs = subscriptions.filter(s => !sweptSubIds.has(s.id))
 
-    // Budget overflow
-    if (isBudgetOverflow(subscriptions, profile.monthlyBudget)) {
-      const over = subscriptions.reduce((s, x) => s + x.monthlyCost, 0) - profile.monthlyBudget
+    // Budget overflow — based on active spend only
+    if (isBudgetOverflow(activeSubs, profile.monthlyBudget)) {
+      const over = activeSubs.reduce((s, x) => s + x.monthlyCost, 0) - profile.monthlyBudget
       result.push({
         id: 'budget',
         severity: 'high',
         icon: <DollarSign className="w-4 h-4 text-rose-500" />,
         title: `Over Budget by $${over.toFixed(2)}/mo`,
-        body: `Your subscriptions total $${subscriptions.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo against a $${profile.monthlyBudget} budget. Cancel or snooze to get back on track.`,
+        body: `Active subscriptions total $${activeSubs.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo against a $${profile.monthlyBudget} budget. Cancel or snooze to get back on track.`,
       })
     }
 
-    // Category overlap
-    findCategoryOverlap(subscriptions).forEach(({ category, subs, totalCost }) => {
+    // Category overlap — active subs only
+    findCategoryOverlap(activeSubs).forEach(({ category, subs, totalCost }) => {
       result.push({
         id: `overlap-${category}`,
         severity: 'medium',
@@ -412,8 +414,8 @@ export default function AISentinel({
       })
     })
 
-    // Binge-and-abandon
-    subscriptions.forEach((s) => {
+    // Binge-and-abandon — active subs only
+    activeSubs.forEach((s) => {
       if (isBingeAndAbandon(s.usageLogs)) {
         result.push({
           id: `binge-${s.id}`,
@@ -425,8 +427,8 @@ export default function AISentinel({
       }
     })
 
-    // Chronic low usage
-    subscriptions.forEach((s) => {
+    // Chronic low usage — active subs only
+    activeSubs.forEach((s) => {
       if (hasChronicLowUsage(s.usageLogs)) {
         result.push({
           id: `chronic-${s.id}`,
@@ -438,8 +440,8 @@ export default function AISentinel({
       }
     })
 
-    // High CPH not near renewal (catch subscriptions shouldSnooze misses in sentinel)
-    subscriptions.forEach((s) => {
+    // High CPH not near renewal — active subs only
+    activeSubs.forEach((s) => {
       const days = daysUntilRenewal(s.renewalDate)
       const cph  = calcCostPerHour(s.monthlyCost, s.totalMinutes)
       if (
@@ -458,7 +460,7 @@ export default function AISentinel({
     })
 
     return result
-  }, [subscriptions, profile, alerts])
+  }, [subscriptions, profile, alerts, sweptSubIds])
 
   // Use backend insights when available, local computation as fallback
   const insights = apiInsights ?? localInsights

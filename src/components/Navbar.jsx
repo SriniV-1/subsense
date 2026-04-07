@@ -17,16 +17,19 @@ const navItems = [
   { to: '/investments', icon: TrendingUp,      label: 'Investments',      color: 'text-indigo-600',  bg: 'bg-indigo-100' },
 ]
 
-export default function Navbar({ devMode, setDevMode, subscriptions, investmentCount = 0 }) {
+export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds = new Set(), investmentCount = 0 }) {
   const alertCount = subscriptions.filter((s) =>
     sentinelShouldAlert(s.renewalDate, s.usageLogs, userProfile.sentinelDropThreshold)
   ).length
 
+  // Exclude swept (snoozed+invested) subs from flagged badge — they're already handled
   const flaggedCount = subscriptions.filter((s) =>
-    sentinelShouldAlert(s.renewalDate, s.usageLogs, userProfile.sentinelDropThreshold) ||
-    isDeadWeight(s.usageLogs) ||
-    shouldSnooze(s.monthlyCost, s.totalMinutes, userProfile.alertThresholdCPH) ||
-    isBingeAndAbandon(s.usageLogs)
+    !sweptSubIds.has(s.id) && (
+      sentinelShouldAlert(s.renewalDate, s.usageLogs, userProfile.sentinelDropThreshold) ||
+      isDeadWeight(s.usageLogs) ||
+      shouldSnooze(s.monthlyCost, s.totalMinutes, userProfile.alertThresholdCPH) ||
+      isBingeAndAbandon(s.usageLogs)
+    )
   ).length
 
   const urgentRenewalCount = subscriptions.filter((s) => {
@@ -34,8 +37,10 @@ export default function Navbar({ devMode, setDevMode, subscriptions, investmentC
     return days >= 0 && days <= 2
   }).length
 
-  const totalSpend = subscriptions.reduce((s, sub) => s + sub.monthlyCost, 0)
-  const budgetPct  = Math.min(100, (totalSpend / userProfile.monthlyBudget) * 100)
+  // Active spend excludes snoozed+invested subscriptions
+  const totalSpend   = subscriptions.filter(s => !sweptSubIds.has(s.id)).reduce((s, sub) => s + sub.monthlyCost, 0)
+  const savedMonthly = subscriptions.filter(s =>  sweptSubIds.has(s.id)).reduce((s, sub) => s + sub.monthlyCost, 0)
+  const budgetPct    = Math.min(100, (totalSpend / userProfile.monthlyBudget) * 100)
 
   return (
     <aside className="w-64 shrink-0 border-r border-violet-100 bg-white/80 backdrop-blur-sm flex flex-col h-full">
@@ -68,7 +73,7 @@ export default function Navbar({ devMode, setDevMode, subscriptions, investmentC
         {/* Budget meter */}
         <div className="bg-violet-50 rounded-2xl px-3 py-2.5 border border-violet-100">
           <div className="flex justify-between items-center mb-1.5">
-            <span className="text-[11px] font-semibold text-gray-500">Monthly Spend</span>
+            <span className="text-[11px] font-semibold text-gray-500">Active Spend</span>
             <span className="text-xs font-bold font-mono text-violet-700">${totalSpend.toFixed(2)}</span>
           </div>
           <div className="h-2 bg-violet-100 rounded-full overflow-hidden">
@@ -85,6 +90,11 @@ export default function Navbar({ devMode, setDevMode, subscriptions, investmentC
             />
           </div>
           <p className="text-[10px] text-gray-400 mt-1.5">of ${userProfile.monthlyBudget} budget</p>
+          {savedMonthly > 0 && (
+            <p className="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+              <span>↓</span> saving ${savedMonthly.toFixed(2)}/mo snoozed
+            </p>
+          )}
         </div>
       </div>
 

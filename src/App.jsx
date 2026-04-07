@@ -76,6 +76,7 @@ export default function App() {
         droppedIds={droppedIds}
         toggleDrop={toggleDrop}
         subscriptions={displayedSubs}
+        sweptSubIds={sweptSubIds}
         investmentCount={investments.length}
       />
       <main className="flex-1 overflow-y-auto">

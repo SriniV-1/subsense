@@ -366,11 +366,14 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
   const unswept     = flagged.filter(s => !sweptSubIds.has(s.id))
   const reclaimable = unswept.reduce((sum, s) => sum + s.monthlyCost, 0)
 
-  const spend      = totalMonthlySpend(subscriptions)
-  const totalHours = subscriptions.reduce((s, sub) => s + sub.totalMinutes / 60, 0)
-  const avgCPH     = spend / (totalHours || 1)
-  const snoozeCount = enriched.filter(s => s.snooze).length
-  const deadCount   = enriched.filter(s => s.dead).length
+  // Active = not yet snoozed+invested; saved = money freed by routing
+  const activeSubs   = enriched.filter(s => !sweptSubIds.has(s.id))
+  const savedMonthly = enriched.filter(s =>  sweptSubIds.has(s.id)).reduce((sum, s) => sum + s.monthlyCost, 0)
+  const spend        = activeSubs.reduce((s, e) => s + e.monthlyCost, 0)
+  const totalHours   = activeSubs.reduce((s, e) => s + e.totalMinutes / 60, 0)
+  const avgCPH       = spend / (totalHours || 1)
+  const snoozeCount  = activeSubs.filter(s => s.snooze).length
+  const deadCount    = activeSubs.filter(s => s.dead || s.grade?.label === 'Dead Weight').length
 
   const portfolioStats = useMemo(() => {
     const best = [...enriched].sort((a, b) => b.valueScore - a.valueScore)[0]
@@ -428,9 +431,10 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           icon={<DollarSign className="w-5 h-5" />}
-          label="Monthly Spend"
+          label="Active Spend"
           value={<AnimatedNumber value={spend} prefix="$" decimals={2} />}
-          sub={`Budget: $${profile.monthlyBudget}`}
+          sub={savedMonthly > 0 ? `↓ saving $${savedMonthly.toFixed(2)}/mo` : `Budget: $${profile.monthlyBudget}`}
+          subGreen={savedMonthly > 0}
           gradient="from-violet-500 to-purple-600"
           pct={(spend / profile.monthlyBudget) * 100}
           delay="0.05s"
@@ -752,7 +756,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 
-function KPICard({ icon, label, value, sub, gradient, pct, delay, onClick }) {
+function KPICard({ icon, label, value, sub, subGreen, gradient, pct, delay, onClick }) {
   return (
     <div
       className="card p-5 stagger-child overflow-hidden relative cursor-pointer hover:scale-[1.02] transition-transform duration-200 active:scale-[0.98]"
@@ -768,7 +772,7 @@ function KPICard({ icon, label, value, sub, gradient, pct, delay, onClick }) {
       </div>
       <p className="text-2xl font-black font-mono text-gray-800 tabular-nums">{value}</p>
       <p className="text-xs font-semibold font-display text-gray-500 mt-0.5">{label}</p>
-      <p className="text-[11px] text-gray-400 mt-1">{sub}</p>
+      <p className={clsx('text-[11px] mt-1 font-semibold', subGreen ? 'text-emerald-600' : 'text-gray-400')}>{sub}</p>
       {pct !== undefined && (
         <div className="mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
