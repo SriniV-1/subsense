@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -10,7 +10,7 @@ import { format, parseISO } from 'date-fns'
 import {
   sentinelShouldAlert, usageDropPercent, daysUntilRenewal, calcCostPerHour,
   findCategoryOverlap, isBingeAndAbandon, hasChronicLowUsage,
-  isBudgetOverflow, shouldSnooze, isDeadWeight,
+  isBudgetOverflow, shouldSnooze, isDeadWeight, normalizeScores, valueGrade,
 } from '../utils/calculations.js'
 import { fetchInsights } from '../api/subscriptions.js'
 import RoutingModal from './RoutingModal.jsx'
@@ -70,11 +70,11 @@ function AreaTooltip({ active, payload }) {
   )
 }
 
-function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop, onSnoozeInvest, swept }) {
+function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop, onSnoozeInvest, swept, normScore = 0 }) {
   const [cancelState, setCancelState] = useState('idle') // idle | confirming | cancelled
   const [dismissed,   setDismissed]   = useState(false)
 
-  const isDead    = isDeadWeight(sub.usageLogs)
+  const isDead    = isDeadWeight(sub.usageLogs) || valueGrade(normScore).label === 'Dead Weight'
   const isSnooze  = shouldSnooze(sub.monthlyCost, sub.totalMinutes, profile.alertThresholdCPH)
   const showActions = (isAlert && !dismissed) || isDead || isSnooze
 
@@ -360,6 +360,13 @@ export default function AISentinel({
   const [sweepTarget,  setSweepTarget]  = useState(null)
   const [apiInsights,  setApiInsights]  = useState(null)  // null = not fetched yet
   const [apiSource,    setApiSource]    = useState(false)  // true when using backend data
+  const [activeTab,    setActiveTab]    = useState('alerts') // 'alerts' | 'insights' | 'monitoring'
+
+  // Normalized scores keyed by subscription id — for grade-based dead weight detection
+  const normScoreMap = useMemo(() => {
+    const scores = normalizeScores(subscriptions)
+    return Object.fromEntries(subscriptions.map((s, i) => [s.id, scores[i]]))
+  }, [subscriptions])
 
   // Try to load insights from the Java backend; fall back to local computation
   useEffect(() => {
@@ -456,6 +463,12 @@ export default function AISentinel({
   // Use backend insights when available, local computation as fallback
   const insights = apiInsights ?? localInsights
 
+  const TAB_CONFIG = [
+    { id: 'alerts',     label: 'Alerts',     count: alerts.length,   color: 'rose' },
+    { id: 'insights',   label: 'Insights',   count: insights.length, color: 'amber' },
+    { id: 'monitoring', label: 'Monitoring', count: nonAlerts.length, color: 'violet' },
+  ]
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -482,8 +495,8 @@ export default function AISentinel({
         </div>
       )}
 
-      {/* Summary row */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Summary strip */}
+      <div className="grid grid-cols-3 gap-4 stagger-child">
         <SummaryCard
           icon={<BellRing className="w-5 h-5 text-rose-500" />}
           label="Active Alerts"
@@ -500,43 +513,85 @@ export default function AISentinel({
         />
         <SummaryCard
           icon={<CheckCircle2 className="w-5 h-5 text-emerald-500" />}
-          label="Healthy"
+          label="Monitoring"
           value={nonAlerts.length}
           color="text-emerald-500"
           bg="bg-emerald-100"
         />
       </div>
 
-      {/* Urgent alerts */}
-      {alerts.length > 0 && (
-        <div className="stagger-child" style={{ animationDelay: '0.15s' }}>
-          <div className="flex items-center gap-2 mb-4">
-            <AlertCircle className="w-4 h-4 text-rose-500" />
-            <h3 className="text-sm font-bold font-display text-gray-700">Urgent Alerts</h3>
-            <span className="badge badge-rose">{alerts.length}</span>
-          </div>
-          <div className="space-y-4">
-            {alerts.map((sub) => (
-              <SentinelCard
-                key={sub.id}
-                sub={sub}
-                profile={profile}
-                isAlert
-                devMode={devMode}
-                isDropped={droppedIds.includes(sub.id)}
-                onToggleDrop={toggleDrop}
-                onSnoozeInvest={setSweepTarget}
-                swept={sweptSubIds.has(sub.id)}
-              />
-            ))}
-          </div>
+      {/* Tab bar */}
+      <div className="flex bg-gray-100 rounded-2xl p-1 gap-1 stagger-child">
+        {TAB_CONFIG.map(({ id, label, count, color }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={clsx(
+              'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold font-display transition-all duration-200',
+              activeTab === id
+                ? 'bg-white shadow-sm text-gray-800'
+                : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            {label}
+            {count > 0 && (
+              <span className={clsx(
+                'text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center',
+                activeTab === id
+                  ? color === 'rose'   ? 'bg-rose-100 text-rose-600'
+                  : color === 'amber'  ? 'bg-amber-100 text-amber-600'
+                                       : 'bg-violet-100 text-violet-600'
+                  : 'bg-gray-200 text-gray-500'
+              )}>
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab: Alerts ────────────────────────────────────────────────────── */}
+      {activeTab === 'alerts' && (
+        <div className="space-y-4 stagger-child">
+          {alerts.length === 0 ? (
+            <div className="rounded-3xl p-12 text-center"
+              style={{ background: 'rgba(236,72,153,0.04)', border: '1px solid rgba(236,72,153,0.15)' }}>
+              <CheckCircle2 className="w-10 h-10 text-rose-300 mx-auto mb-3" />
+              <p className="text-lg font-black font-display text-rose-600">No Active Alerts</p>
+              <p className="text-sm text-gray-400 mt-1">All subscriptions look healthy right now.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500" />
+                <h3 className="text-sm font-bold font-display text-gray-700">Urgent Alerts</h3>
+                <span className="badge badge-rose">{alerts.length}</span>
+              </div>
+              <div className="space-y-4">
+                {alerts.map((sub) => (
+                  <SentinelCard
+                    key={sub.id}
+                    sub={sub}
+                    profile={profile}
+                    isAlert
+                    devMode={devMode}
+                    isDropped={droppedIds.includes(sub.id)}
+                    onToggleDrop={toggleDrop}
+                    onSnoozeInvest={setSweepTarget}
+                    swept={sweptSubIds.has(sub.id)}
+                    normScore={normScoreMap[sub.id] ?? 0}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {/* Portfolio insights */}
-      {insights.length > 0 && (
-        <div className="stagger-child" style={{ animationDelay: '0.18s' }}>
-          <div className="flex items-center gap-2 mb-4">
+      {/* ── Tab: Insights ──────────────────────────────────────────────────── */}
+      {activeTab === 'insights' && (
+        <div className="space-y-4 stagger-child">
+          <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
             <h3 className="text-sm font-bold font-display text-gray-700">Portfolio Insights</h3>
             <span className="badge badge-amber">{insights.length}</span>
@@ -546,41 +601,54 @@ export default function AISentinel({
               </span>
             )}
           </div>
-          <div className="space-y-3">
-            {insights.map(insight => (
-              <InsightCard
-                key={insight.id}
-                {...insight}
-                icon={insight.icon ?? alertIcon(insight.type)}
+
+          {insights.length === 0 ? (
+            <div className="rounded-3xl p-12 text-center"
+              style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.15)' }}>
+              <CheckCircle2 className="w-10 h-10 text-amber-300 mx-auto mb-3" />
+              <p className="text-lg font-black font-display text-amber-600">Portfolio Looks Good</p>
+              <p className="text-sm text-gray-400 mt-1">No issues detected across your subscriptions.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {insights.map(insight => (
+                <InsightCard
+                  key={insight.id}
+                  {...insight}
+                  icon={insight.icon ?? alertIcon(insight.type)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Monitoring ────────────────────────────────────────────────── */}
+      {activeTab === 'monitoring' && (
+        <div className="space-y-4 stagger-child">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 text-violet-500" />
+            <h3 className="text-sm font-bold font-display text-gray-700">All Subscriptions</h3>
+            <span className="badge badge-violet">{nonAlerts.length}</span>
+          </div>
+          <div className="space-y-4">
+            {nonAlerts.map((sub) => (
+              <SentinelCard
+                key={sub.id}
+                sub={sub}
+                profile={profile}
+                isAlert={false}
+                devMode={devMode}
+                isDropped={droppedIds.includes(sub.id)}
+                onToggleDrop={toggleDrop}
+                onSnoozeInvest={setSweepTarget}
+                swept={sweptSubIds.has(sub.id)}
+                normScore={normScoreMap[sub.id] ?? 0}
               />
             ))}
           </div>
         </div>
       )}
-
-      {/* Monitoring */}
-      <div className="stagger-child" style={{ animationDelay: '0.22s' }}>
-        <div className="flex items-center gap-2 mb-4">
-          <Bell className="w-4 h-4 text-violet-500" />
-          <h3 className="text-sm font-bold font-display text-gray-700">Monitoring</h3>
-          <span className="badge badge-violet">{nonAlerts.length}</span>
-        </div>
-        <div className="space-y-4">
-          {nonAlerts.map((sub) => (
-            <SentinelCard
-              key={sub.id}
-              sub={sub}
-              profile={profile}
-              isAlert={false}
-              devMode={devMode}
-              isDropped={droppedIds.includes(sub.id)}
-              onToggleDrop={toggleDrop}
-              onSnoozeInvest={setSweepTarget}
-              swept={sweptSubIds.has(sub.id)}
-            />
-          ))}
-        </div>
-      </div>
 
       {sweepTarget && (
         <RoutingModal

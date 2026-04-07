@@ -119,7 +119,7 @@ export const userProfile = {
   name:                 'Alex Chen',
   email:                'alex@devsws.io',
   avatarInitials:       'AC',
-  monthlyBudget:        150,
+  monthlyBudget:        300,
   alertThresholdCPH:    15,
   sentinelDropThreshold: 50,
 }

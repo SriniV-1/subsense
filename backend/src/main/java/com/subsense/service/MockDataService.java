@@ -35,7 +35,7 @@ public class MockDataService {
     public MockDataService() {
         this.userProfile = new UserProfile(
                 "Alex Chen", "alex@devsws.io", "AC",
-                150.0,   // monthlyBudget — intentionally exceeded for demo
+                300.0,   // monthlyBudget
                 15.0,    // alertThresholdCPH
                 50       // sentinelDropThreshold
         );
