@@ -3,7 +3,6 @@ import { CalendarDays, AlertCircle, Clock, CheckCircle2, Cpu, TrendingDown } fro
 import { format, parseISO } from 'date-fns'
 import { fetchUpcomingRenewals } from '../api/subscriptions.js'
 import { daysUntilRenewal, isDeadWeight, shouldSnooze, sentinelShouldAlert } from '../utils/calculations.js'
-import { userProfile } from '../data/mockData.js'
 import RoutingModal from './RoutingModal.jsx'
 import clsx from 'clsx'
 
@@ -20,19 +19,19 @@ const SECTIONS = ['today', 'urgent', 'warning', 'normal']
 
 // ── Build local renewal events from raw subscriptions (offline fallback) ──────
 
-function buildLocalRenewals(subscriptions) {
+function buildLocalRenewals(subscriptions, profile) {
   return subscriptions
     .map(sub => {
       const days = daysUntilRenewal(sub.renewalDate)
       if (days < 0 || days > 30) return null
       const urgency = days === 0 ? 'today' : days <= 2 ? 'urgent' : days <= 7 ? 'warning' : 'normal'
-      const flagged = isDeadWeight(sub.usageLogs) || shouldSnooze(sub.monthlyCost, sub.totalMinutes, userProfile.alertThresholdCPH) || sentinelShouldAlert(sub.renewalDate, sub.usageLogs, userProfile.sentinelDropThreshold)
+      const flagged = isDeadWeight(sub.usageLogs) || shouldSnooze(sub.monthlyCost, sub.totalMinutes, profile.alertThresholdCPH) || sentinelShouldAlert(sub.renewalDate, sub.usageLogs, profile.sentinelDropThreshold)
       return {
         id: sub.id, name: sub.name, icon: sub.icon, category: sub.category,
         monthlyCost: sub.monthlyCost, accentColor: sub.accentColor,
         renewalDate: sub.renewalDate, daysUntilRenewal: days,
         urgency, isFlagged: flagged,
-        sentinelAlert: sentinelShouldAlert(sub.renewalDate, sub.usageLogs, userProfile.sentinelDropThreshold),
+        sentinelAlert: sentinelShouldAlert(sub.renewalDate, sub.usageLogs, profile.sentinelDropThreshold),
       }
     })
     .filter(Boolean)
@@ -100,7 +99,7 @@ function RenewalCard({ event, onInvest, sweptSubIds }) {
 
 // ── Main RenewalCalendar ──────────────────────────────────────────────────────
 
-export default function RenewalCalendar({ subscriptions, sweptSubIds = new Set(), onInvest }) {
+export default function RenewalCalendar({ subscriptions, sweptSubIds = new Set(), profile, onInvest }) {
   const [events,     setEvents]     = useState(null)
   const [apiSource,  setApiSource]  = useState(false)
   const [sweepTarget,setSweepTarget]= useState(null)
@@ -108,10 +107,10 @@ export default function RenewalCalendar({ subscriptions, sweptSubIds = new Set()
   useEffect(() => {
     fetchUpcomingRenewals()
       .then(data => { setEvents(data); setApiSource(true) })
-      .catch(() => { setEvents(buildLocalRenewals(subscriptions)); setApiSource(false) })
-  }, [subscriptions])
+      .catch(() => { setEvents(buildLocalRenewals(subscriptions, profile)); setApiSource(false) })
+  }, [subscriptions, profile])
 
-  const display = events ?? buildLocalRenewals(subscriptions)
+  const display = events ?? buildLocalRenewals(subscriptions, profile)
 
   const grouped = useMemo(() => {
     const map = {}

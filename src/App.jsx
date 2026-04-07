@@ -77,6 +77,7 @@ export default function App() {
         toggleDrop={toggleDrop}
         subscriptions={displayedSubs}
         sweptSubIds={sweptSubIds}
+        profile={profile}
         investmentCount={investments.length}
       />
       <main className="flex-1 overflow-y-auto">
@@ -140,6 +141,7 @@ export default function App() {
                 <RenewalCalendar
                   subscriptions={displayedSubs}
                   sweptSubIds={sweptSubIds}
+                  profile={profile}
                   onInvest={addInvestment}
                 />
               }

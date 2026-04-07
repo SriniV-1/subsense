@@ -3,7 +3,6 @@ import {
   LayoutDashboard, Flame, ArrowLeftRight, Bell,
   Sparkles, FlaskConical, TrendingUp, Flag, CalendarDays,
 } from 'lucide-react'
-import { userProfile } from '../data/mockData.js'
 import { sentinelShouldAlert, isDeadWeight, shouldSnooze, isBingeAndAbandon, daysUntilRenewal } from '../utils/calculations.js'
 import clsx from 'clsx'
 
@@ -17,17 +16,17 @@ const navItems = [
   { to: '/investments', icon: TrendingUp,      label: 'Investments',      color: 'text-indigo-600',  bg: 'bg-indigo-100' },
 ]
 
-export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds = new Set(), investmentCount = 0 }) {
+export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds = new Set(), profile, investmentCount = 0 }) {
   const alertCount = subscriptions.filter((s) =>
-    sentinelShouldAlert(s.renewalDate, s.usageLogs, userProfile.sentinelDropThreshold)
+    sentinelShouldAlert(s.renewalDate, s.usageLogs, profile.sentinelDropThreshold)
   ).length
 
   // Exclude swept (snoozed+invested) subs from flagged badge — they're already handled
   const flaggedCount = subscriptions.filter((s) =>
     !sweptSubIds.has(s.id) && (
-      sentinelShouldAlert(s.renewalDate, s.usageLogs, userProfile.sentinelDropThreshold) ||
+      sentinelShouldAlert(s.renewalDate, s.usageLogs, profile.sentinelDropThreshold) ||
       isDeadWeight(s.usageLogs) ||
-      shouldSnooze(s.monthlyCost, s.totalMinutes, userProfile.alertThresholdCPH) ||
+      shouldSnooze(s.monthlyCost, s.totalMinutes, profile.alertThresholdCPH) ||
       isBingeAndAbandon(s.usageLogs)
     )
   ).length
@@ -40,7 +39,7 @@ export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds
   // Active spend excludes snoozed+invested subscriptions
   const totalSpend   = subscriptions.filter(s => !sweptSubIds.has(s.id)).reduce((s, sub) => s + sub.monthlyCost, 0)
   const savedMonthly = subscriptions.filter(s =>  sweptSubIds.has(s.id)).reduce((s, sub) => s + sub.monthlyCost, 0)
-  const budgetPct    = Math.min(100, (totalSpend / userProfile.monthlyBudget) * 100)
+  const budgetPct    = Math.min(100, (totalSpend / profile.monthlyBudget) * 100)
 
   return (
     <aside className="w-64 shrink-0 border-r border-violet-100 bg-white/80 backdrop-blur-sm flex flex-col h-full">
@@ -62,11 +61,11 @@ export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds
       <div className="px-4 py-4 border-b border-violet-100">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-400 to-pink-400 flex items-center justify-center text-xs font-black text-white shrink-0 shadow-sm animate-pulse-soft">
-            {userProfile.avatarInitials}
+            {profile.avatarInitials}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-bold font-display text-gray-800 truncate">{userProfile.name}</p>
-            <p className="text-xs text-gray-400 truncate">{userProfile.email}</p>
+            <p className="text-sm font-bold font-display text-gray-800 truncate">{profile.name}</p>
+            <p className="text-xs text-gray-400 truncate">{profile.email}</p>
           </div>
         </div>
 
@@ -89,7 +88,7 @@ export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds
               }}
             />
           </div>
-          <p className="text-[10px] text-gray-400 mt-1.5">of ${userProfile.monthlyBudget} budget</p>
+          <p className="text-[10px] text-gray-400 mt-1.5">of ${profile.monthlyBudget} budget</p>
           {savedMonthly > 0 && (
             <p className="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
               <span>↓</span> saving ${savedMonthly.toFixed(2)}/mo snoozed
