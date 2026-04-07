@@ -45,6 +45,7 @@ export default function InvestmentTracker({ investments, subscriptions }) {
     const map = {}
     investments.forEach(inv => {
       const t = inv.trade.ticker
+      if (!t) return  // brokerage cash deposit — no ticker position
       map[t] = (map[t] || 0) + inv.trade.amountInvested
     })
     return Object.entries(map).map(([ticker, amount]) => ({ ticker, amount }))
@@ -86,7 +87,7 @@ export default function InvestmentTracker({ investments, subscriptions }) {
           Investment Portfolio
         </h2>
         <p className="text-gray-500 text-sm mt-1 font-medium">
-          {investments.length} subscription{investments.length > 1 ? 's' : ''} snoozed · funds routed to index pools
+          {investments.length} subscription{investments.length > 1 ? 's' : ''} snoozed · funds routed
         </p>
       </div>
 
@@ -180,12 +181,18 @@ export default function InvestmentTracker({ investments, subscriptions }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-bold font-display text-gray-800">{inv.subName}</p>
-                  <span
-                    className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full text-white"
-                    style={{ background: TICKER_COLORS[inv.trade.ticker] ?? '#6366f1' }}
-                  >
-                    {inv.trade.ticker}
-                  </span>
+                  {inv.trade.ticker ? (
+                    <span
+                      className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full text-white"
+                      style={{ background: TICKER_COLORS[inv.trade.ticker] ?? '#6366f1' }}
+                    >
+                      {inv.trade.ticker}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full text-white bg-indigo-400">
+                      {inv.trade.brokerage ?? 'Deposit'}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5 truncate">
                   {inv.trade.tradeId} · {inv.trade.poolName}
@@ -200,12 +207,18 @@ export default function InvestmentTracker({ investments, subscriptions }) {
                 <p className="text-sm font-black font-mono text-gray-800">
                   ${inv.trade.amountInvested.toFixed(2)}
                 </p>
-                <p className="text-[11px] font-mono text-violet-600">
-                  {inv.trade.fractionalShares.toFixed(6)} shares
-                </p>
-                <p className="text-[10px] text-gray-400 font-mono">
-                  @${inv.trade.mockPricePerShare?.toFixed(2)}/sh
-                </p>
+                {inv.trade.fractionalShares != null ? (
+                  <>
+                    <p className="text-[11px] font-mono text-violet-600">
+                      {inv.trade.fractionalShares.toFixed(6)} shares
+                    </p>
+                    <p className="text-[10px] text-gray-400 font-mono">
+                      @${inv.trade.mockPricePerShare?.toFixed(2)}/sh
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-indigo-500 font-semibold">Cash deposit</p>
+                )}
               </div>
             </div>
           ))}

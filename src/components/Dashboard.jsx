@@ -190,7 +190,7 @@ function SubscriptionDetailModal({ sub, onClose, onSnoozeInvest, swept, onVsInsp
               className="w-full py-3 rounded-2xl font-bold text-sm text-white transition-all duration-200 active:scale-95"
               style={{ background: `linear-gradient(135deg, ${accent}, #4f46e5)`, boxShadow: `0 4px 20px ${accent}30` }}
             >
-              {(sub.snooze || sub.dead) ? '⚡ Snooze & Invest' : '↗ Invest'} ${sub.monthlyCost.toFixed(2)}
+              {(sub.snooze || sub.dead || sub.grade?.label === 'Dead Weight') ? '⚡ Snooze & Invest' : '↗ Invest'} ${sub.monthlyCost.toFixed(2)}
             </button>
           )}
           {swept && (
@@ -362,7 +362,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
     [subscriptions, normalizedScores, profile]
   )
 
-  const flagged     = enriched.filter(s => s.snooze || s.dead)
+  const flagged     = enriched.filter(s => s.snooze || s.dead || s.grade?.label === 'Dead Weight')
   const unswept     = flagged.filter(s => !sweptSubIds.has(s.id))
   const reclaimable = unswept.reduce((sum, s) => sum + s.monthlyCost, 0)
 
@@ -794,7 +794,7 @@ const GRADE_STYLES = {
 
 function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onOpenDetail, onVsInspect }) {
   const [hovered, setHovered] = useState(false)
-  const flagged   = sub.snooze || sub.dead
+  const flagged   = sub.snooze || sub.dead || sub.grade?.label === 'Dead Weight'
   const ctaAccent = (sub.accentColor === '#ffffff' || sub.accentColor === '#fff') ? '#818cf8' : sub.accentColor
 
   return (
