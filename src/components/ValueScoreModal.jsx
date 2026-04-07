@@ -45,7 +45,8 @@ export default function ValueScoreModal({ sub, portfolioStats, onClose }) {
 
   const hours     = sub.totalMinutes / 60
   const computed  = hours > 0 ? (hours / sub.monthlyCost).toFixed(4) : '0.0000'
-  const grade     = sub.grade ?? 'N/A'
+  // grade may arrive as a string ('Excellent') or as an object {label, color} from enriched
+  const grade     = (typeof sub.grade === 'object' ? sub.grade?.label : sub.grade) ?? 'N/A'
   const gs        = GRADE_STYLE[grade] ?? GRADE_STYLE['Poor']
   const normScore = sub.normScore ?? 0
 

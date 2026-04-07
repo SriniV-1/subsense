@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, DollarSign, Clock, AlertTriangle, Zap, X, ExternalLink,
-  ShieldCheck, Cpu,
+  ShieldCheck, Cpu, ChevronRight,
 } from 'lucide-react'
 import ValueScoreModal from './ValueScoreModal.jsx'
 import {
@@ -335,7 +335,8 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
   const [kpiDetail,      setKpiDetail]      = useState(null)
   const [portfolioData,  setPortfolioData]  = useState(null)
   const [apiSource,      setApiSource]      = useState(false)
-  const [vsTarget,       setVsTarget]       = useState(null)  // value score inspect
+  const [vsTarget,          setVsTarget]          = useState(null)   // value score inspect
+  const [expandedCategory,  setExpandedCategory]  = useState(null)   // category expand
 
   useEffect(() => {
     fetchPortfolioSummary()
@@ -381,6 +382,23 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
       count:    enriched.length,
     }
   }, [enriched])
+
+  // Category breakdown — computed locally so section always renders even without Java API
+  const localCategoryBreakdown = useMemo(() => {
+    const total = enriched.reduce((s, e) => s + e.monthlyCost, 0)
+    const groups = {}
+    enriched.forEach(sub => {
+      if (!groups[sub.category]) groups[sub.category] = { category: sub.category, count: 0, totalCost: 0, deadWeightCount: 0 }
+      groups[sub.category].count++
+      groups[sub.category].totalCost += sub.monthlyCost
+      if (sub.dead || valueGrade(sub.normScore).label === 'Dead Weight') groups[sub.category].deadWeightCount++
+    })
+    return Object.values(groups)
+      .map(g => ({ ...g, pctOfTotal: total > 0 ? (g.totalCost / total) * 100 : 0 }))
+      .sort((a, b) => b.totalCost - a.totalCost)
+  }, [enriched])
+
+  const categoryBreakdown = portfolioData?.categoryBreakdown ?? localCategoryBreakdown
 
   const chartData = [...enriched]
     .sort((a, b) => b.valueScore - a.valueScore)
@@ -447,10 +465,11 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
         />
       </div>
 
-      {/* Health score + category breakdown (from Java backend when available) */}
-      {portfolioData && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 stagger-child" style={{ animationDelay: '0.21s' }}>
-          {/* Health Score */}
+      {/* Health score + category breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 stagger-child" style={{ animationDelay: '0.21s' }}>
+
+        {/* Health Score — Java API only */}
+        {portfolioData && (
           <div className="card p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -491,40 +510,98 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
               </div>
             )}
           </div>
+        )}
 
-          {/* Category breakdown */}
-          <div className="card p-5 lg:col-span-2">
-            <p className="text-xs font-bold font-display text-gray-600 uppercase tracking-wider mb-3">Spend by Category</p>
-            <div className="space-y-2.5">
-              {portfolioData.categoryBreakdown?.slice(0, 6).map(cat => (
-                <div key={cat.category} className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-gray-600 w-24 truncate shrink-0">{cat.category}</span>
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{
-                        width: `${Math.min(100, cat.pctOfTotal)}%`,
-                        background: cat.deadWeightCount > 0
-                          ? 'linear-gradient(90deg,#f97316,#ef4444)'
-                          : 'linear-gradient(90deg,#8b5cf6,#a855f7)',
-                      }}
-                    />
-                  </div>
-                  <div className="text-right shrink-0 w-20">
-                    <span className="font-mono text-xs font-bold text-gray-700">${cat.totalCost.toFixed(2)}</span>
-                    <span className="text-[10px] text-gray-400 ml-1">{cat.pctOfTotal.toFixed(0)}%</span>
-                  </div>
-                  {cat.deadWeightCount > 0 && (
-                    <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-full border border-rose-100 shrink-0">
-                      {cat.deadWeightCount} dead
-                    </span>
-                  )}
-                </div>
-              ))}
+        {/* Category breakdown — always shown, local fallback when API offline */}
+        <div className={clsx('card p-5', portfolioData ? 'lg:col-span-2' : 'lg:col-span-3')}>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-bold font-display text-gray-600 uppercase tracking-wider">Spend by Category</p>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400">click to expand</span>
+              {apiSource && (
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100">
+                  <Cpu className="w-2.5 h-2.5" />Java
+                </span>
+              )}
             </div>
           </div>
+          <div className="space-y-0.5">
+            {categoryBreakdown.map(cat => {
+              const isExpanded = expandedCategory === cat.category
+              const catSubs = enriched.filter(s => s.category === cat.category)
+              return (
+                <div key={cat.category}>
+                  {/* Clickable row */}
+                  <div
+                    className="flex items-center gap-3 cursor-pointer py-1.5 px-2 rounded-xl hover:bg-violet-50/50 transition-colors group"
+                    onClick={() => setExpandedCategory(isExpanded ? null : cat.category)}
+                  >
+                    <ChevronRight className={clsx(
+                      'w-3.5 h-3.5 text-gray-300 transition-transform duration-200 shrink-0',
+                      isExpanded && 'rotate-90 text-violet-400'
+                    )} />
+                    <span className="text-xs font-semibold text-gray-600 w-20 truncate shrink-0">{cat.category}</span>
+                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${Math.min(100, cat.pctOfTotal)}%`,
+                          background: cat.deadWeightCount > 0
+                            ? 'linear-gradient(90deg,#f97316,#ef4444)'
+                            : 'linear-gradient(90deg,#8b5cf6,#a855f7)',
+                        }}
+                      />
+                    </div>
+                    <div className="text-right shrink-0 w-20">
+                      <span className="font-mono text-xs font-bold text-gray-700">${cat.totalCost.toFixed(2)}</span>
+                      <span className="text-[10px] text-gray-400 ml-1">{cat.pctOfTotal.toFixed(0)}%</span>
+                    </div>
+                    {cat.deadWeightCount > 0 && (
+                      <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-full border border-rose-100 shrink-0">
+                        {cat.deadWeightCount} dead
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Expanded subscription list */}
+                  {isExpanded && (
+                    <div className="ml-9 mb-1 border-l-2 border-violet-100 pl-3 space-y-0.5">
+                      {catSubs.map(sub => {
+                        const gradeLabel = valueGrade(sub.normScore).label
+                        const isDead  = sub.dead || gradeLabel === 'Dead Weight'
+                        return (
+                          <div
+                            key={sub.id}
+                            className="flex items-center gap-2.5 py-1.5 px-2 rounded-xl hover:bg-violet-50 transition-colors cursor-pointer group/sub"
+                            onClick={() => setDetailSub(sub)}
+                          >
+                            <span className="text-base shrink-0">{sub.icon}</span>
+                            <span className="text-sm font-semibold text-gray-700 flex-1 truncate">{sub.name}</span>
+                            <span className="font-mono text-xs text-gray-500 shrink-0">${sub.monthlyCost}/mo</span>
+                            <span className={clsx(
+                              'text-[10px] font-bold px-1.5 py-0.5 rounded-full border shrink-0',
+                              isDead
+                                ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                : sub.snooze
+                                ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                : 'bg-violet-50 text-violet-600 border-violet-200'
+                            )}>
+                              {isDead ? 'Dead Weight' : sub.snooze ? 'High CPH' : gradeLabel}
+                            </span>
+                            <span className="text-[9px] text-violet-400 opacity-0 group-hover/sub:opacity-100 transition-opacity font-medium shrink-0">
+                              details →
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
-      )}
+      </div>
 
       {/* Savings routing banner */}
       {unswept.length > 0 && (
