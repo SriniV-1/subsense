@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { snoozeAndSweep } from '../api/subscriptions.js'
 
 // ── Mirror of SweepService.java mock prices ───────────────────────────────────
@@ -117,9 +118,9 @@ export default function RoutingModal({ subscription, onClose, onInvest }) {
 
   const selectedTicker = TICKERS.find(t => t.value === ticker)
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background: 'rgba(6, 4, 16, 0.82)', backdropFilter: 'blur(10px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
@@ -379,6 +380,7 @@ export default function RoutingModal({ subscription, onClose, onInvest }) {
 
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import RoutingModal from './RoutingModal.jsx'
 import {
@@ -72,9 +73,9 @@ function SubscriptionDetailModal({ sub, onClose, onSnoozeInvest, swept }) {
   }))
   const avgMinutes = sub.usageLogs.reduce((s, l) => s + l.minutes, 0) / sub.usageLogs.length
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background: 'rgba(15,10,30,0.6)', backdropFilter: 'blur(8px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
@@ -189,16 +190,17 @@ function SubscriptionDetailModal({ sub, onClose, onSnoozeInvest, swept }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
 // ── KPI Detail Modal ──────────────────────────────────────────────────────────
 
 function KPIDetailModal({ type, enriched, profile, spend, avgCPH, onClose }) {
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background: 'rgba(15,10,30,0.5)', backdropFilter: 'blur(6px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
@@ -306,7 +308,8 @@ function KPIDetailModal({ type, enriched, profile, spend, avgCPH, onClose }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

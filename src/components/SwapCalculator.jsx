@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowLeftRight, Trash2, ShoppingBag, TrendingDown, CheckCircle2, Trophy } from 'lucide-react'
 import {
   isDeadWeight, calcCostPerHour, calcValueScore, normalizeScores,
@@ -140,8 +141,8 @@ function ConfirmSwap({ sub, option, onClose }) {
   const units        = Math.floor(sub.monthlyCost / option.unitCost)
   const annualSavings= sub.monthlyCost * 12
 
-  return (
-    <div className="fixed inset-0 bg-violet-950/30 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+  return createPortal(
+    <div className="fixed inset-0 bg-violet-950/30 backdrop-blur-sm flex items-center justify-center z-[9999] p-6">
       <div className="card-glow max-w-md w-full p-6 animate-spring-in">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-emerald">
@@ -187,7 +188,8 @@ function ConfirmSwap({ sub, option, onClose }) {
         </p>
         <button onClick={onClose} className="btn-primary w-full">Close</button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
