@@ -14,7 +14,7 @@ import ValueScoreModal from './ValueScoreModal.jsx'
 import {
   calcValueScore, calcCostPerHour, normalizeScores,
   shouldSnooze, isDeadWeight, totalMonthlySpend, valueGrade,
-  daysUntilRenewal, isBudgetOverflow, findCategoryOverlap,
+  daysUntilRenewal, isBudgetOverflow, findCategoryOverlap, sentinelShouldAlert,
 } from '../utils/calculations.js'
 import { fetchPortfolioSummary } from '../api/subscriptions.js'
 import { format, parseISO } from 'date-fns'
@@ -403,6 +403,69 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
 
   const categoryBreakdown = portfolioData?.categoryBreakdown ?? localCategoryBreakdown
 
+  // Health score computed locally from activeSubs — updates live as subs are snoozed/cancelled
+  const localHealth = useMemo(() => {
+    if (activeSubs.length === 0) return { healthScore: 100, healthGrade: 'Excellent', healthSummary: 'All subscriptions are handled — great work!', topIssues: [] }
+
+    const totalSpend = activeSubs.reduce((s, e) => s + e.monthlyCost, 0)
+    const totalHours = activeSubs.reduce((s, e) => s + e.totalMinutes / 60, 0)
+    const avgCPH     = totalHours > 0 ? totalSpend / totalHours : 999
+
+    let score = 100
+
+    // Budget overflow: up to -25
+    if (totalSpend > profile.monthlyBudget) {
+      const overRatio = (totalSpend - profile.monthlyBudget) / profile.monthlyBudget
+      score -= Math.min(25, Math.round(overRatio * 40))
+    }
+
+    // Dead weight: -5 per sub, max -20
+    const deadCount = activeSubs.filter(s => s.dead || s.grade?.label === 'Dead Weight').length
+    score -= Math.min(20, deadCount * 5)
+
+    // Sentinel alerts: -8 per alert, max -16
+    const sentinelCount = activeSubs.filter(s =>
+      sentinelShouldAlert(s.renewalDate, s.usageLogs, profile.sentinelDropThreshold)
+    ).length
+    score -= Math.min(16, sentinelCount * 8)
+
+    // Snooze-only (not dead/sentinel): -2 per, max -10
+    const snoozeOnly = activeSubs.filter(s =>
+      s.snooze && !s.dead && s.grade?.label !== 'Dead Weight'
+    ).length
+    score -= Math.min(10, snoozeOnly * 2)
+
+    // Avg CPH > 2× threshold: -10
+    if (avgCPH > profile.alertThresholdCPH * 2) score -= 10
+
+    score = Math.max(0, score)
+
+    const healthGrade =
+      score >= 85 ? 'Excellent' :
+      score >= 70 ? 'Good' :
+      score >= 50 ? 'Fair' :
+      score >= 30 ? 'At Risk' : 'Critical'
+
+    const healthSummary =
+      score >= 85 ? 'Your portfolio is in great shape — well-optimized value.' :
+      totalSpend > profile.monthlyBudget * 1.5 ? `$${(totalSpend - profile.monthlyBudget).toFixed(0)}/mo over budget — cut dead weight to recover quickly.` :
+      deadCount >= 4 ? `${deadCount} subscriptions have zero or near-zero usage — easy wins to cancel.` :
+      score < 50 ? 'Several high-cost, low-usage subscriptions are dragging your score.' :
+      'A few subscriptions could be trimmed to improve overall value.'
+
+    const topIssues = []
+    if (totalSpend > profile.monthlyBudget)
+      topIssues.push(`$${(totalSpend - profile.monthlyBudget).toFixed(2)}/mo over budget`)
+    if (deadCount > 0)
+      topIssues.push(`${deadCount} dead weight subscription${deadCount > 1 ? 's' : ''}`)
+    if (sentinelCount > 0)
+      topIssues.push(`${sentinelCount} sentinel alert${sentinelCount > 1 ? 's' : ''} active`)
+    if (snoozeOnly > 0)
+      topIssues.push(`${snoozeOnly} high cost-per-hour subscription${snoozeOnly > 1 ? 's' : ''}`)
+
+    return { healthScore: score, healthGrade, healthSummary, topIssues }
+  }, [activeSubs, profile])
+
   const chartData = [...enriched]
     .sort((a, b) => b.valueScore - a.valueScore)
     .map(s => ({ name: s.name, valueScore: s.valueScore, cph: s.cph === Infinity ? 99 : s.cph, id: s.id }))
@@ -472,52 +535,46 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
       {/* Health score + category breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 stagger-child" style={{ animationDelay: '0.21s' }}>
 
-        {/* Health Score — Java API only */}
-        {portfolioData && (
-          <div className="card p-5 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-violet-500" />
-                <span className="text-xs font-bold font-display text-gray-600 uppercase tracking-wider">Portfolio Health</span>
-              </div>
-              {apiSource && (
-                <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100">
-                  <Cpu className="w-2.5 h-2.5" />Java
-                </span>
-              )}
+        {/* Health Score — always visible, computed locally so it updates live */}
+        <div className="card p-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-violet-500" />
+              <span className="text-xs font-bold font-display text-gray-600 uppercase tracking-wider">Portfolio Health</span>
             </div>
-            <div className="flex items-end gap-3">
-              <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-black text-xl shrink-0"
-                style={{
-                  background: portfolioData.healthScore >= 70
-                    ? 'linear-gradient(135deg,#10b981,#34d399)'
-                    : portfolioData.healthScore >= 50
-                    ? 'linear-gradient(135deg,#f59e0b,#fbbf24)'
-                    : 'linear-gradient(135deg,#ef4444,#f97316)',
-                }}
-              >
-                {portfolioData.healthScore}
-              </div>
-              <div>
-                <p className="font-black font-display text-gray-800">{portfolioData.healthGrade}</p>
-                <p className="text-xs text-gray-400 leading-snug mt-0.5">{portfolioData.healthSummary}</p>
-              </div>
-            </div>
-            {portfolioData.topIssues?.length > 0 && (
-              <div className="space-y-1 pt-2 border-t border-gray-100">
-                {portfolioData.topIssues.slice(0, 2).map((issue, i) => (
-                  <p key={i} className="text-[11px] text-gray-500 flex items-start gap-1.5">
-                    <span className="text-rose-400 shrink-0 mt-0.5">•</span>{issue}
-                  </p>
-                ))}
-              </div>
-            )}
+            <span className="text-[10px] text-violet-400 font-semibold">live</span>
           </div>
-        )}
+          <div className="flex items-end gap-3">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-black text-xl shrink-0 transition-all duration-500"
+              style={{
+                background: localHealth.healthScore >= 70
+                  ? 'linear-gradient(135deg,#10b981,#34d399)'
+                  : localHealth.healthScore >= 50
+                  ? 'linear-gradient(135deg,#f59e0b,#fbbf24)'
+                  : 'linear-gradient(135deg,#ef4444,#f97316)',
+              }}
+            >
+              <AnimatedNumber value={localHealth.healthScore} decimals={0} />
+            </div>
+            <div>
+              <p className="font-black font-display text-gray-800">{localHealth.healthGrade}</p>
+              <p className="text-xs text-gray-400 leading-snug mt-0.5">{localHealth.healthSummary}</p>
+            </div>
+          </div>
+          {localHealth.topIssues.length > 0 && (
+            <div className="space-y-1 pt-2 border-t border-gray-100">
+              {localHealth.topIssues.slice(0, 3).map((issue, i) => (
+                <p key={i} className="text-[11px] text-gray-500 flex items-start gap-1.5">
+                  <span className="text-rose-400 shrink-0 mt-0.5">•</span>{issue}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Category breakdown — always shown, local fallback when API offline */}
-        <div className={clsx('card p-5', portfolioData ? 'lg:col-span-2' : 'lg:col-span-3')}>
+        <div className="card p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-bold font-display text-gray-600 uppercase tracking-wider">Spend by Category</p>
             <div className="flex items-center gap-2">
