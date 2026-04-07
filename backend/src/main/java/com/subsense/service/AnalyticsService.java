@@ -1,7 +1,12 @@
 package com.subsense.service;
 
+import com.subsense.dto.CategoryBreakdown;
+import com.subsense.dto.FlaggedSubscription;
+import com.subsense.dto.RenewalEvent;
+import com.subsense.dto.SubscriptionEnriched;
 import com.subsense.model.Subscription;
 import com.subsense.model.UsageLog;
+import com.subsense.model.UserProfile;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -141,5 +146,157 @@ public class AnalyticsService {
     /** Total monthly spend across all subscriptions. */
     public double totalMonthlySpend(List<Subscription> subscriptions) {
         return subscriptions.stream().mapToDouble(Subscription::monthlyCost).sum();
+    }
+
+    // ── Portfolio health score (0-100) ─────────────────────────────────────────
+
+    /**
+     * Composite health score:
+     *   Start at 100, deduct for budget overflow, dead weight, sentinel alerts,
+     *   excessive snooze candidates, and chronically high avg CPH.
+     */
+    public int computeHealthScore(List<SubscriptionEnriched> enriched, UserProfile profile) {
+        int score = 100;
+
+        double totalSpend = enriched.stream().mapToDouble(SubscriptionEnriched::monthlyCost).sum();
+        double totalHours = enriched.stream().mapToDouble(e -> e.totalMinutes() / 60.0).sum();
+        double avgCPH     = totalHours > 0 ? totalSpend / totalHours : 999;
+
+        // Budget overflow: up to -25
+        if (totalSpend > profile.monthlyBudget()) {
+            double overRatio = (totalSpend - profile.monthlyBudget()) / profile.monthlyBudget();
+            score -= (int) Math.min(25, overRatio * 40);
+        }
+
+        // Dead weight or "Dead Weight" grade: -5 per sub, max -20
+        long deadCount = enriched.stream()
+                .filter(e -> e.isDeadWeight() || "Dead Weight".equals(e.grade()))
+                .count();
+        score -= (int) Math.min(20, deadCount * 5);
+
+        // Sentinel alerts: -8 per alert, max -16
+        long sentinelCount = enriched.stream().filter(SubscriptionEnriched::sentinelAlert).count();
+        score -= (int) Math.min(16, sentinelCount * 8);
+
+        // Snooze candidates not already flagged as dead/sentinel: -2 per, max -10
+        long snoozeOnly = enriched.stream()
+                .filter(e -> e.shouldSnooze() && !e.isDeadWeight() && !e.sentinelAlert())
+                .count();
+        score -= (int) Math.min(10, snoozeOnly * 2);
+
+        // Avg CPH well above threshold: -10
+        if (avgCPH > profile.alertThresholdCPH() * 2) score -= 10;
+
+        return Math.max(0, score);
+    }
+
+    public String healthGrade(int score) {
+        if (score >= 85) return "Excellent";
+        if (score >= 70) return "Good";
+        if (score >= 50) return "Fair";
+        if (score >= 30) return "At Risk";
+        return "Critical";
+    }
+
+    public String healthSummary(int score, List<SubscriptionEnriched> enriched, UserProfile profile) {
+        double totalSpend = enriched.stream().mapToDouble(SubscriptionEnriched::monthlyCost).sum();
+        long dead = enriched.stream().filter(e -> e.isDeadWeight() || "Dead Weight".equals(e.grade())).count();
+        if (score >= 85) return "Your portfolio is in great shape — well-optimized value.";
+        if (totalSpend > profile.monthlyBudget() * 1.5)
+            return String.format("$%.0f/mo over budget — cut dead weight to recover quickly.", totalSpend - profile.monthlyBudget());
+        if (dead >= 4) return dead + " subscriptions have zero or near-zero usage — easy wins to cancel.";
+        if (score < 50) return "Several high-cost, low-usage subscriptions are dragging your score.";
+        return "A few subscriptions could be trimmed to improve overall value.";
+    }
+
+    // ── Category breakdown ─────────────────────────────────────────────────────
+
+    public List<CategoryBreakdown> computeCategoryBreakdown(List<SubscriptionEnriched> enriched) {
+        double totalSpend = enriched.stream().mapToDouble(SubscriptionEnriched::monthlyCost).sum();
+        Map<String, List<SubscriptionEnriched>> byCategory = new LinkedHashMap<>();
+        for (SubscriptionEnriched e : enriched) {
+            byCategory.computeIfAbsent(e.category(), k -> new ArrayList<>()).add(e);
+        }
+        return byCategory.entrySet().stream()
+                .map(entry -> {
+                    List<SubscriptionEnriched> group = entry.getValue();
+                    double cost = group.stream().mapToDouble(SubscriptionEnriched::monthlyCost).sum();
+                    double hours = group.stream().mapToDouble(e -> e.totalMinutes() / 60.0).sum();
+                    double avgCPH = hours > 0
+                            ? Math.round((cost / hours) * 100.0) / 100.0
+                            : -1;
+                    long dead = group.stream()
+                            .filter(e -> e.isDeadWeight() || "Dead Weight".equals(e.grade()))
+                            .count();
+                    return new CategoryBreakdown(
+                            entry.getKey(),
+                            group.size(),
+                            Math.round(cost * 100.0) / 100.0,
+                            Math.round((cost / totalSpend) * 10000.0) / 100.0,
+                            avgCPH,
+                            (int) dead
+                    );
+                })
+                .sorted(Comparator.comparingDouble(CategoryBreakdown::totalCost).reversed())
+                .toList();
+    }
+
+    // ── Flagged subscriptions ──────────────────────────────────────────────────
+
+    /**
+     * Returns all subscriptions that have at least one actionable issue,
+     * with pre-computed issue tag list.  Matches the frontend FlaggedView logic.
+     */
+    public List<FlaggedSubscription> computeFlagged(List<SubscriptionEnriched> enriched) {
+        return enriched.stream()
+                .map(e -> {
+                    List<String> issues = new ArrayList<>();
+                    if (e.sentinelAlert()) issues.add("sentinel");
+                    if (e.isDeadWeight() || "Dead Weight".equals(e.grade())) issues.add("dead");
+                    if (e.shouldSnooze() && !issues.contains("sentinel")) issues.add("snooze");
+                    if (isBingeAndAbandon(e.usageLogs()) && !issues.contains("dead")) issues.add("binge_abandon");
+                    if (issues.isEmpty()) return null;
+                    return new FlaggedSubscription(
+                            e.id(), e.name(), e.category(), e.monthlyCost(),
+                            e.accentColor(), e.icon(), e.tier(), e.renewalDate(),
+                            e.usagePattern(), e.usageLogs(), e.totalMinutes(),
+                            e.valueScore(), e.costPerHour(), e.normScore(),
+                            e.isDeadWeight(), e.shouldSnooze(), e.sentinelAlert(),
+                            isBingeAndAbandon(e.usageLogs()), e.grade(),
+                            e.daysUntilRenewal(), e.usageDropPercent(),
+                            Math.round(e.monthlyCost() * 12 * 100.0) / 100.0,
+                            issues
+                    );
+                })
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparingInt(f -> {
+                    if (f.issues().contains("sentinel")) return 0;
+                    if (f.issues().contains("dead"))     return 1;
+                    return 2;
+                }))
+                .toList();
+    }
+
+    // ── Renewal calendar ───────────────────────────────────────────────────────
+
+    /** Upcoming renewals for the next 30 days, sorted by renewal date ascending. */
+    public List<RenewalEvent> computeUpcomingRenewals(List<SubscriptionEnriched> enriched) {
+        return enriched.stream()
+                .filter(e -> e.daysUntilRenewal() >= 0 && e.daysUntilRenewal() <= 30)
+                .map(e -> {
+                    String urgency = e.daysUntilRenewal() == 0 ? "today"
+                            : e.daysUntilRenewal() <= 2       ? "urgent"
+                            : e.daysUntilRenewal() <= 7       ? "warning"
+                            : "normal";
+                    boolean flagged = e.isDeadWeight() || "Dead Weight".equals(e.grade())
+                            || e.shouldSnooze() || e.sentinelAlert();
+                    return new RenewalEvent(
+                            e.id(), e.name(), e.icon(), e.category(), e.monthlyCost(),
+                            e.accentColor(), e.renewalDate(), e.daysUntilRenewal(),
+                            urgency, flagged, e.sentinelAlert()
+                    );
+                })
+                .sorted(Comparator.comparingInt(RenewalEvent::daysUntilRenewal))
+                .toList();
     }
 }

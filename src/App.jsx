@@ -7,6 +7,7 @@ import SwapCalculator from './components/SwapCalculator.jsx'
 import AISentinel from './components/AISentinel.jsx'
 import InvestmentTracker from './components/InvestmentTracker.jsx'
 import FlaggedView from './components/FlaggedView.jsx'
+import RenewalCalendar from './components/RenewalCalendar.jsx'
 import { fetchSubscriptions, fetchProfile } from './api/subscriptions.js'
 import { subscriptions as mockSubs, userProfile as mockProfile } from './data/mockData.js'
 import { dropRecentUsage } from './data/generateUsage.js'
@@ -128,6 +129,16 @@ export default function App() {
                   profile={profile}
                   sweptSubIds={sweptSubIds}
                   investments={investments}
+                  onInvest={addInvestment}
+                />
+              }
+            />
+            <Route
+              path="/calendar"
+              element={
+                <RenewalCalendar
+                  subscriptions={displayedSubs}
+                  sweptSubIds={sweptSubIds}
                   onInvest={addInvestment}
                 />
               }

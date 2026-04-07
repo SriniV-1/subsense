@@ -18,3 +18,8 @@ export const snoozeAndSweep      = (id, ticker = 'VOO') =>
 // Backend-computed intelligence (Java InsightsController)
 export const fetchInsights         = () => api.get('/api/insights')
 export const fetchRecommendations  = () => api.get('/api/recommendations')
+
+// Portfolio analytics (Java PortfolioController)
+export const fetchPortfolioSummary = () => api.get('/api/portfolio/summary')
+export const fetchFlagged          = () => api.get('/api/portfolio/flagged')
+export const fetchUpcomingRenewals = () => api.get('/api/portfolio/renewals')

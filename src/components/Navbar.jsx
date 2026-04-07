@@ -1,10 +1,10 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Flame, ArrowLeftRight, Bell,
-  Sparkles, FlaskConical, TrendingUp, Flag,
+  Sparkles, FlaskConical, TrendingUp, Flag, CalendarDays,
 } from 'lucide-react'
 import { userProfile } from '../data/mockData.js'
-import { sentinelShouldAlert, isDeadWeight, shouldSnooze, isBingeAndAbandon } from '../utils/calculations.js'
+import { sentinelShouldAlert, isDeadWeight, shouldSnooze, isBingeAndAbandon, daysUntilRenewal } from '../utils/calculations.js'
 import clsx from 'clsx'
 
 const navItems = [
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/swap',        icon: ArrowLeftRight,  label: 'Swap Calculator',  color: 'text-emerald-600', bg: 'bg-emerald-100' },
   { to: '/sentinel',    icon: Bell,            label: 'AI Sentinel',      color: 'text-pink-600',    bg: 'bg-pink-100' },
   { to: '/flagged',     icon: Flag,            label: 'Flagged',          color: 'text-rose-600',    bg: 'bg-rose-100' },
+  { to: '/calendar',    icon: CalendarDays,    label: 'Renewals',         color: 'text-sky-600',     bg: 'bg-sky-100' },
   { to: '/investments', icon: TrendingUp,      label: 'Investments',      color: 'text-indigo-600',  bg: 'bg-indigo-100' },
 ]
 
@@ -27,6 +28,11 @@ export default function Navbar({ devMode, setDevMode, subscriptions, investmentC
     shouldSnooze(s.monthlyCost, s.totalMinutes, userProfile.alertThresholdCPH) ||
     isBingeAndAbandon(s.usageLogs)
   ).length
+
+  const urgentRenewalCount = subscriptions.filter((s) => {
+    const days = daysUntilRenewal(s.renewalDate)
+    return days >= 0 && days <= 2
+  }).length
 
   const totalSpend = subscriptions.reduce((s, sub) => s + sub.monthlyCost, 0)
   const budgetPct  = Math.min(100, (totalSpend / userProfile.monthlyBudget) * 100)
@@ -115,6 +121,11 @@ export default function Navbar({ devMode, setDevMode, subscriptions, investmentC
                 {label === 'Flagged' && flaggedCount > 0 && (
                   <span className="bg-gradient-to-r from-rose-500 to-orange-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-bounce">
                     {flaggedCount}
+                  </span>
+                )}
+                {label === 'Renewals' && urgentRenewalCount > 0 && (
+                  <span className="bg-gradient-to-r from-sky-500 to-indigo-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">
+                    {urgentRenewalCount}
                   </span>
                 )}
                 {label === 'Investments' && investmentCount > 0 && (

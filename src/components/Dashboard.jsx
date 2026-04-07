@@ -8,12 +8,14 @@ import {
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, DollarSign, Clock, AlertTriangle, Zap, X, ExternalLink,
+  ShieldCheck, Cpu,
 } from 'lucide-react'
 import {
   calcValueScore, calcCostPerHour, normalizeScores,
   shouldSnooze, isDeadWeight, totalMonthlySpend, valueGrade,
-  daysUntilRenewal,
+  daysUntilRenewal, isBudgetOverflow, findCategoryOverlap,
 } from '../utils/calculations.js'
+import { fetchPortfolioSummary } from '../api/subscriptions.js'
 import { format, parseISO } from 'date-fns'
 import clsx from 'clsx'
 
@@ -317,9 +319,17 @@ function KPIDetailModal({ type, enriched, profile, spend, avgCPH, onClose }) {
 
 export default function Dashboard({ subscriptions, profile, sweptSubIds = new Set(), investments = [], onInvest }) {
   const normalizedScores = useMemo(() => normalizeScores(subscriptions), [subscriptions])
-  const [sweepTarget, setSweepTarget] = useState(null)
-  const [detailSub,   setDetailSub]   = useState(null)
-  const [kpiDetail,   setKpiDetail]   = useState(null)
+  const [sweepTarget,    setSweepTarget]    = useState(null)
+  const [detailSub,      setDetailSub]      = useState(null)
+  const [kpiDetail,      setKpiDetail]      = useState(null)
+  const [portfolioData,  setPortfolioData]  = useState(null)
+  const [apiSource,      setApiSource]      = useState(false)
+
+  useEffect(() => {
+    fetchPortfolioSummary()
+      .then(data => { setPortfolioData(data); setApiSource(true) })
+      .catch(() => setApiSource(false))
+  }, [subscriptions])
 
   const investmentMap = useMemo(
     () => Object.fromEntries(investments.map(inv => [inv.subId, inv])),
@@ -408,6 +418,85 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
           onClick={() => setKpiDetail('dead')}
         />
       </div>
+
+      {/* Health score + category breakdown (from Java backend when available) */}
+      {portfolioData && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 stagger-child" style={{ animationDelay: '0.21s' }}>
+          {/* Health Score */}
+          <div className="card p-5 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-violet-500" />
+                <span className="text-xs font-bold font-display text-gray-600 uppercase tracking-wider">Portfolio Health</span>
+              </div>
+              {apiSource && (
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100">
+                  <Cpu className="w-2.5 h-2.5" />Java
+                </span>
+              )}
+            </div>
+            <div className="flex items-end gap-3">
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-black text-xl shrink-0"
+                style={{
+                  background: portfolioData.healthScore >= 70
+                    ? 'linear-gradient(135deg,#10b981,#34d399)'
+                    : portfolioData.healthScore >= 50
+                    ? 'linear-gradient(135deg,#f59e0b,#fbbf24)'
+                    : 'linear-gradient(135deg,#ef4444,#f97316)',
+                }}
+              >
+                {portfolioData.healthScore}
+              </div>
+              <div>
+                <p className="font-black font-display text-gray-800">{portfolioData.healthGrade}</p>
+                <p className="text-xs text-gray-400 leading-snug mt-0.5">{portfolioData.healthSummary}</p>
+              </div>
+            </div>
+            {portfolioData.topIssues?.length > 0 && (
+              <div className="space-y-1 pt-2 border-t border-gray-100">
+                {portfolioData.topIssues.slice(0, 2).map((issue, i) => (
+                  <p key={i} className="text-[11px] text-gray-500 flex items-start gap-1.5">
+                    <span className="text-rose-400 shrink-0 mt-0.5">•</span>{issue}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Category breakdown */}
+          <div className="card p-5 lg:col-span-2">
+            <p className="text-xs font-bold font-display text-gray-600 uppercase tracking-wider mb-3">Spend by Category</p>
+            <div className="space-y-2.5">
+              {portfolioData.categoryBreakdown?.slice(0, 6).map(cat => (
+                <div key={cat.category} className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-gray-600 w-24 truncate shrink-0">{cat.category}</span>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${Math.min(100, cat.pctOfTotal)}%`,
+                        background: cat.deadWeightCount > 0
+                          ? 'linear-gradient(90deg,#f97316,#ef4444)'
+                          : 'linear-gradient(90deg,#8b5cf6,#a855f7)',
+                      }}
+                    />
+                  </div>
+                  <div className="text-right shrink-0 w-20">
+                    <span className="font-mono text-xs font-bold text-gray-700">${cat.totalCost.toFixed(2)}</span>
+                    <span className="text-[10px] text-gray-400 ml-1">{cat.pctOfTotal.toFixed(0)}%</span>
+                  </div>
+                  {cat.deadWeightCount > 0 && (
+                    <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-full border border-rose-100 shrink-0">
+                      {cat.deadWeightCount} dead
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Savings routing banner */}
       {unswept.length > 0 && (
