@@ -10,6 +10,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Clock, AlertTriangle, Zap, X, ExternalLink,
   ShieldCheck, Cpu,
 } from 'lucide-react'
+import ValueScoreModal from './ValueScoreModal.jsx'
 import {
   calcValueScore, calcCostPerHour, normalizeScores,
   shouldSnooze, isDeadWeight, totalMonthlySpend, valueGrade,
@@ -48,6 +49,7 @@ function CustomTooltip({ active, payload }) {
       <p className="font-bold font-display text-gray-800">{d.name}</p>
       <p className="text-violet-600 mt-1 font-mono font-semibold">Score: {d.valueScore}</p>
       <p className="text-gray-400">${d.cph === 99 ? '∞' : d.cph}/hr</p>
+      <p className="text-violet-400 mt-1.5 text-[10px]">click bar to inspect →</p>
     </div>
   )
 }
@@ -64,7 +66,7 @@ function MiniTrendTooltip({ active, payload }) {
   )
 }
 
-function SubscriptionDetailModal({ sub, onClose, onSnoozeInvest, swept }) {
+function SubscriptionDetailModal({ sub, onClose, onSnoozeInvest, swept, onVsInspect }) {
   const navigate = useNavigate()
   const accent = (sub.accentColor === '#ffffff' || sub.accentColor === '#fff') ? '#818cf8' : sub.accentColor
   const days = daysUntilRenewal(sub.renewalDate)
@@ -115,19 +117,28 @@ function SubscriptionDetailModal({ sub, onClose, onSnoozeInvest, swept }) {
           {/* Key metrics grid */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Monthly Cost',  value: `$${sub.monthlyCost}/mo`,                    color: 'text-gray-800' },
-              { label: 'Value Score',   value: sub.valueScore.toFixed(4),                    color: 'text-violet-600' },
+              { label: 'Monthly Cost',  value: `$${sub.monthlyCost}/mo`,                    color: 'text-gray-800',    clickable: false },
+              { label: 'Value Score',   value: sub.valueScore.toFixed(4),                    color: 'text-violet-600',  clickable: true  },
               { label: 'Cost / Hour',   value: sub.cph === Infinity ? '$∞/hr' : `$${sub.cph}/hr`,
-                color: sub.cph > 15 ? 'text-rose-500' : 'text-emerald-600' },
-              { label: 'Hours / Month', value: `${(sub.totalMinutes / 60).toFixed(1)} hrs`,  color: 'text-gray-700' },
+                color: sub.cph > 15 ? 'text-rose-500' : 'text-emerald-600',                                            clickable: false },
+              { label: 'Hours / Month', value: `${(sub.totalMinutes / 60).toFixed(1)} hrs`,  color: 'text-gray-700',    clickable: false },
               { label: 'Renews In',     value: days === 0 ? 'Today!' : `${days} days`,
-                color: days <= 2 ? 'text-rose-500' : days <= 7 ? 'text-amber-500' : 'text-gray-700' },
+                color: days <= 2 ? 'text-rose-500' : days <= 7 ? 'text-amber-500' : 'text-gray-700',                   clickable: false },
               { label: 'Grade',         value: sub.grade?.label ?? 'N/A',
-                color: sub.dead ? 'text-rose-500' : sub.snooze ? 'text-amber-500' : 'text-emerald-600' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-violet-50/60 rounded-2xl px-4 py-3">
+                color: sub.dead ? 'text-rose-500' : sub.snooze ? 'text-amber-500' : 'text-emerald-600',                clickable: false },
+            ].map(({ label, value, color, clickable }) => (
+              <div
+                key={label}
+                className={clsx('bg-violet-50/60 rounded-2xl px-4 py-3 relative', clickable && 'cursor-pointer hover:bg-violet-100/70 transition-colors group')}
+                onClick={clickable ? () => onVsInspect?.(sub) : undefined}
+              >
                 <p className={clsx('font-mono text-base font-black', color)}>{value}</p>
                 <p className="text-[11px] text-gray-400 mt-0.5 font-medium">{label}</p>
+                {clickable && (
+                  <span className="absolute top-2 right-2 text-[9px] text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                    inspect ↗
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -324,6 +335,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
   const [kpiDetail,      setKpiDetail]      = useState(null)
   const [portfolioData,  setPortfolioData]  = useState(null)
   const [apiSource,      setApiSource]      = useState(false)
+  const [vsTarget,       setVsTarget]       = useState(null)  // value score inspect
 
   useEffect(() => {
     fetchPortfolioSummary()
@@ -359,6 +371,17 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
   const snoozeCount = enriched.filter(s => s.snooze).length
   const deadCount   = enriched.filter(s => s.dead).length
 
+  const portfolioStats = useMemo(() => {
+    const best = [...enriched].sort((a, b) => b.valueScore - a.valueScore)[0]
+    const avg  = enriched.reduce((s, e) => s + e.valueScore, 0) / (enriched.length || 1)
+    return {
+      avg:      parseFloat(avg.toFixed(3)),
+      best:     best?.valueScore ?? 0,
+      bestName: best?.name ?? '',
+      count:    enriched.length,
+    }
+  }, [enriched])
+
   const chartData = [...enriched]
     .sort((a, b) => b.valueScore - a.valueScore)
     .map(s => ({ name: s.name, valueScore: s.valueScore, cph: s.cph === Infinity ? 99 : s.cph, id: s.id }))
@@ -366,6 +389,11 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
   function openDetailById(id) {
     const sub = enriched.find(s => s.id === id)
     if (sub) setDetailSub(sub)
+  }
+
+  function openVsByName(name) {
+    const sub = enriched.find(s => s.name === name)
+    if (sub) setVsTarget(sub)
   }
 
   return (
@@ -548,13 +576,13 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
         <div className="flex items-center gap-2 mb-1">
           <TrendingUp className="w-5 h-5 text-violet-500" />
           <h3 className="font-bold font-display text-gray-800">Value Score Ranking</h3>
-          <span className="text-[10px] text-gray-400 ml-auto font-medium">click a bar to inspect</span>
+          <span className="text-[10px] text-violet-400 ml-auto font-semibold cursor-default">click a bar to see how it's calculated ↗</span>
         </div>
         <p className="text-xs text-gray-400 mb-5 font-medium">Hours used ÷ monthly cost — higher is better</p>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart
             data={chartData} layout="vertical" margin={{ left: 0, right: 24 }}
-            onClick={(data) => data?.activePayload?.[0] && openDetailById(data.activePayload[0].payload.id)}
+            onClick={(data) => data?.activePayload?.[0] && openVsByName(data.activePayload[0].payload.name)}
           >
             <defs>
               {BAR_COLORS.map((color, i) => (
@@ -595,6 +623,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
               investment={investmentMap[sub.id]}
               onSnoozeInvest={setSweepTarget}
               onOpenDetail={setDetailSub}
+              onVsInspect={setVsTarget}
             />
           ))}
         </div>
@@ -616,6 +645,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
           onClose={() => setDetailSub(null)}
           onSnoozeInvest={(sub) => { setDetailSub(null); setSweepTarget(sub) }}
           swept={sweptSubIds.has(detailSub.id)}
+          onVsInspect={(sub) => { setDetailSub(null); setVsTarget(sub) }}
         />
       )}
 
@@ -628,6 +658,15 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
           spend={spend}
           avgCPH={avgCPH}
           onClose={() => setKpiDetail(null)}
+        />
+      )}
+
+      {/* Value Score inspector */}
+      {vsTarget && (
+        <ValueScoreModal
+          sub={vsTarget}
+          portfolioStats={portfolioStats}
+          onClose={() => setVsTarget(null)}
         />
       )}
     </div>
@@ -676,7 +715,7 @@ const GRADE_STYLES = {
   'Dead Weight': 'badge-rose',
 }
 
-function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onOpenDetail }) {
+function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onOpenDetail, onVsInspect }) {
   const [hovered, setHovered] = useState(false)
   const flagged   = sub.snooze || sub.dead
   const ctaAccent = (sub.accentColor === '#ffffff' || sub.accentColor === '#fff') ? '#818cf8' : sub.accentColor
@@ -740,7 +779,13 @@ function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onOpe
 
       {/* Metrics */}
       <div className="relative grid grid-cols-3 gap-2 mt-3">
-        <Metric label="Value Score" value={sub.valueScore.toFixed(3)} color="text-violet-600" />
+        <Metric
+          label="Value Score"
+          value={sub.valueScore.toFixed(3)}
+          color="text-violet-600"
+          onClick={(e) => { e.stopPropagation(); onVsInspect?.(sub) }}
+          hint="inspect"
+        />
         <Metric
           label="Cost/hr"
           value={sub.cph === Infinity ? '∞' : `$${sub.cph}`}
@@ -805,11 +850,22 @@ function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onOpe
   )
 }
 
-function Metric({ label, value, color }) {
+function Metric({ label, value, color, onClick, hint }) {
   return (
-    <div className="bg-violet-50/70 rounded-xl px-2 py-2 text-center hover:bg-violet-50 transition-colors">
+    <div
+      className={clsx(
+        'bg-violet-50/70 rounded-xl px-2 py-2 text-center transition-colors relative group',
+        onClick ? 'cursor-pointer hover:bg-violet-100 hover:ring-1 hover:ring-violet-300' : 'hover:bg-violet-50'
+      )}
+      onClick={onClick}
+    >
       <p className={clsx('font-mono text-xs font-bold', color)}>{value}</p>
       <p className="text-[10px] text-gray-400 mt-0.5 leading-tight font-medium">{label}</p>
+      {hint && (
+        <span className="absolute -top-1 -right-1 text-[8px] bg-violet-500 text-white px-1 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity font-bold pointer-events-none">
+          {hint}
+        </span>
+      )}
     </div>
   )
 }
