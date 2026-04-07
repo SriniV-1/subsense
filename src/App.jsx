@@ -5,16 +5,38 @@ import Dashboard from './components/Dashboard.jsx'
 import HeatmapModule from './components/HeatmapModule.jsx'
 import SwapCalculator from './components/SwapCalculator.jsx'
 import AISentinel from './components/AISentinel.jsx'
+import InvestmentTracker from './components/InvestmentTracker.jsx'
+import FlaggedView from './components/FlaggedView.jsx'
 import { fetchSubscriptions, fetchProfile } from './api/subscriptions.js'
 import { subscriptions as mockSubs, userProfile as mockProfile } from './data/mockData.js'
 import { dropRecentUsage } from './data/generateUsage.js'
 
 export default function App() {
   const [subscriptions, setSubscriptions] = useState([])
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [devMode, setDevMode] = useState(false)
-  const [droppedIds, setDroppedIds] = useState([])
+  const [profile, setProfile]             = useState(null)
+  const [loading, setLoading]             = useState(true)
+  const [devMode, setDevMode]             = useState(false)
+  const [droppedIds, setDroppedIds]       = useState([])
+
+  // ── Centralized investment state (shared across Dashboard, Sentinel, Tracker) ──
+  const [investments, setInvestments] = useState([])
+
+  function addInvestment(sub, trade) {
+    setInvestments(prev => {
+      if (prev.some(inv => inv.subId === sub.id)) return prev   // idempotent
+      return [...prev, {
+        id:          trade.tradeId,
+        subId:       sub.id,
+        subName:     sub.name,
+        subIcon:     sub.icon,
+        monthlyCost: sub.monthlyCost,
+        trade,
+        routedAt:    new Date().toISOString(),
+      }]
+    })
+  }
+
+  const sweptSubIds = new Set(investments.map(inv => inv.subId))
 
   useEffect(() => {
     Promise.all([fetchSubscriptions(), fetchProfile()])
@@ -23,7 +45,6 @@ export default function App() {
         setProfile(prof)
       })
       .catch(() => {
-        // Backend not running — fall back to local mock data silently
         setSubscriptions(mockSubs)
         setProfile(mockProfile)
       })
@@ -54,6 +75,7 @@ export default function App() {
         droppedIds={droppedIds}
         toggleDrop={toggleDrop}
         subscriptions={displayedSubs}
+        investmentCount={investments.length}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-8">
@@ -61,7 +83,16 @@ export default function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route
               path="/dashboard"
-              element={<Dashboard subscriptions={displayedSubs} profile={profile} devMode={devMode} />}
+              element={
+                <Dashboard
+                  subscriptions={displayedSubs}
+                  profile={profile}
+                  devMode={devMode}
+                  sweptSubIds={sweptSubIds}
+                  investments={investments}
+                  onInvest={addInvestment}
+                />
+              }
             />
             <Route
               path="/heatmap"
@@ -80,6 +111,24 @@ export default function App() {
                   devMode={devMode}
                   droppedIds={droppedIds}
                   toggleDrop={toggleDrop}
+                  sweptSubIds={sweptSubIds}
+                  onInvest={addInvestment}
+                />
+              }
+            />
+            <Route
+              path="/investments"
+              element={<InvestmentTracker investments={investments} subscriptions={displayedSubs} />}
+            />
+            <Route
+              path="/flagged"
+              element={
+                <FlaggedView
+                  subscriptions={displayedSubs}
+                  profile={profile}
+                  sweptSubIds={sweptSubIds}
+                  investments={investments}
+                  onInvest={addInvestment}
                 />
               }
             />
@@ -94,9 +143,12 @@ function LoadingScreen() {
   return (
     <div className="flex h-screen items-center justify-center">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-violet-500 via-purple-500 to-pink-500 mx-auto mb-4 animate-bounce" style={{ boxShadow: '0 8px 24px rgba(139,92,246,0.4)' }} />
+        <div
+          className="w-14 h-14 rounded-3xl bg-gradient-to-br from-violet-500 via-purple-500 to-pink-500 mx-auto mb-4 animate-bounce"
+          style={{ boxShadow: '0 8px 24px rgba(139,92,246,0.4)' }}
+        />
         <p className="text-violet-600 text-sm font-bold">Loading SubSense...</p>
-        <p className="text-gray-400 text-xs mt-1">✨ Crunching your subscription data</p>
+        <p className="text-gray-400 text-xs mt-1">Crunching your subscription data</p>
       </div>
     </div>
   )

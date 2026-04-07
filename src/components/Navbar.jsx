@@ -1,22 +1,31 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Flame, ArrowLeftRight, Bell,
-  Sparkles, FlaskConical,
+  Sparkles, FlaskConical, TrendingUp, Flag,
 } from 'lucide-react'
 import { userProfile } from '../data/mockData.js'
-import { sentinelShouldAlert } from '../utils/calculations.js'
+import { sentinelShouldAlert, isDeadWeight, shouldSnooze, isBingeAndAbandon } from '../utils/calculations.js'
 import clsx from 'clsx'
 
 const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',      color: 'text-violet-600', bg: 'bg-violet-100' },
-  { to: '/heatmap',   icon: Flame,           label: 'Utilization Map', color: 'text-orange-500', bg: 'bg-orange-100' },
-  { to: '/swap',      icon: ArrowLeftRight,  label: 'Swap Calculator', color: 'text-emerald-600',bg: 'bg-emerald-100' },
-  { to: '/sentinel',  icon: Bell,            label: 'AI Sentinel',     color: 'text-pink-600',   bg: 'bg-pink-100' },
+  { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard',        color: 'text-violet-600',  bg: 'bg-violet-100' },
+  { to: '/heatmap',     icon: Flame,           label: 'Utilization Map',  color: 'text-orange-500',  bg: 'bg-orange-100' },
+  { to: '/swap',        icon: ArrowLeftRight,  label: 'Swap Calculator',  color: 'text-emerald-600', bg: 'bg-emerald-100' },
+  { to: '/sentinel',    icon: Bell,            label: 'AI Sentinel',      color: 'text-pink-600',    bg: 'bg-pink-100' },
+  { to: '/flagged',     icon: Flag,            label: 'Flagged',          color: 'text-rose-600',    bg: 'bg-rose-100' },
+  { to: '/investments', icon: TrendingUp,      label: 'Investments',      color: 'text-indigo-600',  bg: 'bg-indigo-100' },
 ]
 
-export default function Navbar({ devMode, setDevMode, subscriptions }) {
+export default function Navbar({ devMode, setDevMode, subscriptions, investmentCount = 0 }) {
   const alertCount = subscriptions.filter((s) =>
     sentinelShouldAlert(s.renewalDate, s.usageLogs, userProfile.sentinelDropThreshold)
+  ).length
+
+  const flaggedCount = subscriptions.filter((s) =>
+    sentinelShouldAlert(s.renewalDate, s.usageLogs, userProfile.sentinelDropThreshold) ||
+    isDeadWeight(s.usageLogs) ||
+    shouldSnooze(s.monthlyCost, s.totalMinutes, userProfile.alertThresholdCPH) ||
+    isBingeAndAbandon(s.usageLogs)
   ).length
 
   const totalSpend = subscriptions.reduce((s, sub) => s + sub.monthlyCost, 0)
@@ -93,7 +102,7 @@ export default function Navbar({ devMode, setDevMode, subscriptions }) {
               <>
                 <span className={clsx(
                   'w-7 h-7 rounded-xl flex items-center justify-center transition-all duration-200',
-                  isActive ? `${bg} ${color}` : 'text-gray-400 group-hover:text-violet-500'
+                  isActive ? `${bg} ${color}` : 'text-gray-400'
                 )}>
                   <Icon className="w-4 h-4" />
                 </span>
@@ -101,6 +110,16 @@ export default function Navbar({ devMode, setDevMode, subscriptions }) {
                 {label === 'AI Sentinel' && alertCount > 0 && (
                   <span className="bg-gradient-to-r from-rose-500 to-pink-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-bounce">
                     {alertCount}
+                  </span>
+                )}
+                {label === 'Flagged' && flaggedCount > 0 && (
+                  <span className="bg-gradient-to-r from-rose-500 to-orange-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-bounce">
+                    {flaggedCount}
+                  </span>
+                )}
+                {label === 'Investments' && investmentCount > 0 && (
+                  <span className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">
+                    {investmentCount}
                   </span>
                 )}
               </>
@@ -116,16 +135,16 @@ export default function Navbar({ devMode, setDevMode, subscriptions }) {
           className={clsx(
             'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold font-display border transition-all duration-200',
             devMode
-              ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-amber'
+              ? 'bg-amber-50 text-amber-600 border-amber-200'
               : 'text-gray-400 border-gray-200 hover:border-violet-200 hover:text-violet-500 hover:bg-violet-50'
           )}
         >
           <FlaskConical className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1 text-left">Developer Mode</span>
-          <div className={clsx(
-            'w-8 h-4.5 rounded-full relative transition-all duration-300 flex items-center px-0.5',
-            devMode ? 'bg-amber-400' : 'bg-gray-200'
-          )} style={{ height: '18px' }}>
+          <div
+            className="w-8 rounded-full relative transition-all duration-300 flex items-center px-0.5"
+            style={{ height: '18px', background: devMode ? '#fbbf24' : '#e5e7eb' }}
+          >
             <div className={clsx(
               'w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-300',
               devMode ? 'translate-x-3.5' : 'translate-x-0'
@@ -134,7 +153,7 @@ export default function Navbar({ devMode, setDevMode, subscriptions }) {
         </button>
         {devMode && (
           <p className="text-[10px] text-amber-500 mt-2 px-1 leading-snug font-medium">
-            Drop usage on Sentinel tab to trigger live alerts ✨
+            Drop usage on Sentinel tab to trigger live alerts
           </p>
         )}
       </div>

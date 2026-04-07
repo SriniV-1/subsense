@@ -1,9 +1,11 @@
 package com.subsense.controller;
 
 import com.subsense.dto.SubscriptionEnriched;
+import com.subsense.dto.TradeConfirmation;
 import com.subsense.model.UsageLog;
 import com.subsense.service.MockDataService;
 import com.subsense.service.SubscriptionService;
+import com.subsense.service.SweepService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,10 +18,14 @@ public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
     private final MockDataService mockData;
+    private final SweepService sweepService;
 
-    public SubscriptionController(SubscriptionService subscriptionService, MockDataService mockData) {
+    public SubscriptionController(SubscriptionService subscriptionService,
+                                  MockDataService mockData,
+                                  SweepService sweepService) {
         this.subscriptionService = subscriptionService;
         this.mockData = mockData;
+        this.sweepService = sweepService;
     }
 
     /** GET /api/subscriptions — all subscriptions with computed metrics */
@@ -71,6 +77,33 @@ public class SubscriptionController {
                 "id", id,
                 "action", "cancelled",
                 "message", sub.name() + " cancellation initiated."
+        ));
+    }
+
+    /**
+     * POST /api/subscriptions/{id}/snooze-and-sweep?ticker=VOO
+     *
+     * Snoozes the subscription and immediately routes the saved monthly cost into
+     * a fractional index position via the institutional logic gate (SweepService).
+     *
+     * Returns a unified envelope: snooze metadata + TradeConfirmation.
+     */
+    @PostMapping("/{id}/snooze-and-sweep")
+    public ResponseEntity<Map<String, Object>> snoozeAndSweep(
+            @PathVariable String id,
+            @RequestParam(defaultValue = "VOO") String ticker) {
+
+        var sub = mockData.getSubscription(id);
+        if (sub == null) return ResponseEntity.notFound().build();
+
+        TradeConfirmation trade = sweepService.executeMicroInvestment(sub.monthlyCost(), ticker);
+
+        return ResponseEntity.ok(Map.of(
+                "id",           id,
+                "action",       "snoozed_and_swept",
+                "subscriptionName", sub.name(),
+                "savedAmount",  sub.monthlyCost(),
+                "trade",        trade
         ));
     }
 }

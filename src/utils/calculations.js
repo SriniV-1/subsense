@@ -122,3 +122,51 @@ export function valueGrade(normalizedScore) {
   if (normalizedScore >= 20) return { label: 'Poor', color: 'text-orange-400' }
   return { label: 'Dead Weight', color: 'text-red-400' }
 }
+
+/**
+ * Detect subscriptions in the same category (potential spending overlap).
+ * Returns categories where 2+ subscriptions exist.
+ */
+export function findCategoryOverlap(subscriptions) {
+  const groups = {}
+  subscriptions.forEach((s) => {
+    groups[s.category] = groups[s.category] || []
+    groups[s.category].push(s)
+  })
+  return Object.entries(groups)
+    .filter(([, subs]) => subs.length >= 2)
+    .map(([category, subs]) => ({
+      category,
+      subs,
+      totalCost: subs.reduce((sum, s) => sum + s.monthlyCost, 0),
+    }))
+}
+
+/**
+ * Binge-and-abandon: was used heavily in the past, has gone cold recently.
+ */
+export function isBingeAndAbandon(usageLogs, recentDays = 10) {
+  if (usageLogs.length < recentDays + 10) return false
+  const recent = usageLogs.slice(-recentDays)
+  const older  = usageLogs.slice(-30, -recentDays)
+  if (!older.length) return false
+  const recentAvg = recent.reduce((s, l) => s + l.minutes, 0) / recent.length
+  const olderAvg  = older.reduce((s, l) => s + l.minutes, 0) / older.length
+  return olderAvg > 45 && recentAvg < 5
+}
+
+/**
+ * Chronic low-usage: subscribed but barely touches the app all month.
+ */
+export function hasChronicLowUsage(usageLogs, minThreshold = 8) {
+  if (usageLogs.length < 14) return false
+  const avg = usageLogs.reduce((s, l) => s + l.minutes, 0) / usageLogs.length
+  return avg > 0 && avg < minThreshold
+}
+
+/**
+ * Is the portfolio over the monthly budget?
+ */
+export function isBudgetOverflow(subscriptions, budget) {
+  return totalMonthlySpend(subscriptions) > budget
+}

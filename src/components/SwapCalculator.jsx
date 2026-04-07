@@ -314,7 +314,7 @@ export default function SwapCalculator({ subscriptions }) {
                   Swap <span className="text-emerald-600">{selectedSub.name}</span> for...
                 </h3>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-3 overflow-y-auto pr-1" style={{ maxHeight: '520px' }}>
                 {swapOptions.map((opt) => (
                   <SwapOptionCard
                     key={opt.id}

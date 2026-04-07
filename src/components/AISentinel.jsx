@@ -1,16 +1,34 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
-  Bell, BellOff, BellRing, Calendar, TrendingDown,
-  FlaskConical, AlertCircle, CheckCircle2, Sparkles,
+  Bell, BellRing, Calendar, TrendingDown,
+  FlaskConical, AlertCircle, CheckCircle2, AlertTriangle, Layers, DollarSign, Cpu,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import {
   sentinelShouldAlert, usageDropPercent, daysUntilRenewal, calcCostPerHour,
+  findCategoryOverlap, isBingeAndAbandon, hasChronicLowUsage,
+  isBudgetOverflow, shouldSnooze, isDeadWeight,
 } from '../utils/calculations.js'
+import { fetchInsights } from '../api/subscriptions.js'
+import RoutingModal from './RoutingModal.jsx'
 import clsx from 'clsx'
+
+// Map backend alert types → lucide icon
+function alertIcon(type) {
+  switch (type) {
+    case 'budget':       return <DollarSign className="w-4 h-4 text-rose-500" />
+    case 'overlap':      return <Layers className="w-4 h-4 text-amber-500" />
+    case 'binge_abandon':return <TrendingDown className="w-4 h-4 text-amber-500" />
+    case 'chronic_low':  return <AlertTriangle className="w-4 h-4 text-violet-500" />
+    case 'high_cph':     return <AlertCircle className="w-4 h-4 text-violet-500" />
+    default:             return <AlertCircle className="w-4 h-4 text-gray-400" />
+  }
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function RenewalCountdown({ days }) {
   const urgent  = days <= 1
@@ -23,7 +41,7 @@ function RenewalCountdown({ days }) {
                 'bg-violet-100 text-violet-600'
     )}>
       <Calendar className="w-3 h-3" />
-      {days === 0 ? 'Renews TODAY 😱' : days === 1 ? 'Renews tomorrow' : `Renews in ${days} days`}
+      {days === 0 ? 'Renews TODAY' : days === 1 ? 'Renews tomorrow' : `Renews in ${days}d`}
     </div>
   )
 }
@@ -37,7 +55,7 @@ function DropBadge({ pct }) {
                   'bg-gray-100 text-gray-500'
     )}>
       <TrendingDown className="w-3 h-3" />
-      {pct}% usage drop
+      {pct}% drop
     </div>
   )
 }
@@ -52,18 +70,55 @@ function AreaTooltip({ active, payload }) {
   )
 }
 
-function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop }) {
-  const [dismissed, setDismissed] = useState(false)
-  const drop       = usageDropPercent(sub.usageLogs)
-  const days       = daysUntilRenewal(sub.renewalDate)
-  const cph        = calcCostPerHour(sub.monthlyCost, sub.totalMinutes)
-  const recentAvg  = sub.usageLogs.slice(-7).reduce((s, l) => s + l.minutes, 0) / 7
+function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop, onSnoozeInvest, swept }) {
+  const [cancelState, setCancelState] = useState('idle') // idle | confirming | cancelled
+  const [dismissed,   setDismissed]   = useState(false)
+
+  const isDead    = isDeadWeight(sub.usageLogs)
+  const isSnooze  = shouldSnooze(sub.monthlyCost, sub.totalMinutes, profile.alertThresholdCPH)
+  const showActions = (isAlert && !dismissed) || isDead || isSnooze
+
+  const drop          = usageDropPercent(sub.usageLogs)
+  const days          = daysUntilRenewal(sub.renewalDate)
+  const cph           = calcCostPerHour(sub.monthlyCost, sub.totalMinutes)
+  const recentAvg     = sub.usageLogs.slice(-7).reduce((s, l) => s + l.minutes, 0) / 7
   const historicalAvg = sub.usageLogs.slice(0, -7).reduce((s, l) => s + l.minutes, 0) / Math.max(1, sub.usageLogs.length - 7)
+  const annualSavings = (sub.monthlyCost * 12).toFixed(0)
 
   const trendData = sub.usageLogs.slice(-14).map((l) => ({
-    date: l.date ? format(parseISO(l.date), 'MMM d') : '',
+    date:    l.date ? format(parseISO(l.date), 'MMM d') : '',
     minutes: l.minutes,
   }))
+
+  if (cancelState === 'cancelled') {
+    return (
+      <div className="card overflow-hidden border-emerald-200">
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 px-5 py-4 flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-black font-display text-emerald-700">Cancellation Initiated</p>
+            <p className="text-xs text-emerald-600 mt-0.5">
+              {sub.name} will not renew. You save{' '}
+              <span className="font-mono font-black">${sub.monthlyCost}/mo</span> ·{' '}
+              <span className="font-mono font-black">${annualSavings}/yr</span>
+            </p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-2xl font-black font-mono text-emerald-600">${sub.monthlyCost}</p>
+            <p className="text-[10px] text-emerald-500 font-semibold">saved/mo</p>
+          </div>
+        </div>
+        <div className="px-5 py-3 flex items-center gap-3">
+          <span className="text-2xl">{sub.icon}</span>
+          <div>
+            <p className="text-sm font-bold font-display text-gray-500 line-through">{sub.name}</p>
+            <p className="text-xs text-gray-400">{sub.category} · was ${sub.monthlyCost}/mo</p>
+          </div>
+          <span className="ml-auto badge badge-emerald">Cancelled</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={clsx(
@@ -75,19 +130,16 @@ function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop 
         <div className="bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-100 px-5 py-4 flex items-start gap-3">
           <BellRing className="w-5 h-5 text-rose-500 shrink-0 mt-0.5 animate-wiggle" />
           <div className="flex-1">
-            <p className="text-sm font-black font-display text-rose-600">⚡ AI Sentinel Alert</p>
+            <p className="text-sm font-black font-display text-rose-600">AI Sentinel Alert</p>
             <p className="text-xs text-rose-500 mt-0.5">
               {sub.name} renews{' '}
               {days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`} — usage dropped{' '}
               <span className="font-black text-rose-600">{drop}%</span> in the last 7 days.
             </p>
-            {/* The hook quote */}
             <blockquote className="mt-3 pl-3 border-l-2 border-rose-400">
               <p className="text-xs italic text-rose-500 leading-relaxed">
                 "Don't pay for the person you were last month —{' '}
-                <span className="font-black not-italic text-rose-700">
-                  pay for the person you are today.
-                </span>"
+                <span className="font-black not-italic text-rose-700">pay for the person you are today.</span>"
               </p>
             </blockquote>
           </div>
@@ -103,15 +155,14 @@ function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop 
       <div className="p-5">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <span className={clsx(
-              'text-2xl transition-transform duration-300',
-              isAlert && !dismissed && 'animate-wiggle'
-            )}>
+            <span className={clsx('text-2xl', isAlert && !dismissed && 'animate-wiggle')}>
               {sub.icon}
             </span>
             <div>
               <h3 className="font-bold font-display text-gray-800">{sub.name}</h3>
-              <p className="text-xs text-gray-400">{sub.category} · <span className="font-mono font-semibold">${sub.monthlyCost}/mo</span></p>
+              <p className="text-xs text-gray-400">
+                {sub.category} · <span className="font-mono font-semibold">${sub.monthlyCost}/mo</span>
+              </p>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 <RenewalCountdown days={days} />
                 {drop > 0 && <DropBadge pct={drop} />}
@@ -130,20 +181,20 @@ function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop 
               )}
             >
               <FlaskConical className="w-3.5 h-3.5" />
-              {isDropped ? '✅ Zeroed' : 'Drop Usage'}
+              {isDropped ? 'Zeroed' : 'Drop Usage'}
             </button>
           )}
         </div>
 
-        {/* Metrics row */}
+        {/* Metrics */}
         <div className="grid grid-cols-3 gap-2 mb-4">
-          <MetricBox label="Recent Avg"  value={`${recentAvg.toFixed(0)} min/d`} sub="last 7 days"  hot={recentAvg < historicalAvg * 0.5} />
+          <MetricBox label="Recent Avg"  value={`${recentAvg.toFixed(0)} min/d`}     sub="last 7 days"  hot={recentAvg < historicalAvg * 0.5} />
           <MetricBox label="Prev Avg"    value={`${historicalAvg.toFixed(0)} min/d`} sub="prior period" />
-          <MetricBox label="Cost/hr"     value={cph === Infinity ? '$∞' : `$${cph}`} sub="this month"   hot={cph > profile.alertThresholdCPH} />
+          <MetricBox label="Cost/hr"     value={cph === Infinity ? '$∞' : `$${cph}`}  sub="this month"   hot={cph > profile.alertThresholdCPH} />
         </div>
 
-        {/* Trend sparkline */}
-        <ResponsiveContainer width="100%" height={90}>
+        {/* Sparkline */}
+        <ResponsiveContainer width="100%" height={80}>
           <AreaChart data={trendData} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
             <defs>
               <linearGradient id={`area-${sub.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -164,18 +215,89 @@ function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop 
         </ResponsiveContainer>
 
         {/* Actions */}
-        {isAlert && !dismissed && (
-          <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-            <button className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold font-display py-2 rounded-xl transition-all duration-200 hover:-translate-y-0.5">
-              Cancel Subscription
-            </button>
-            <button
-              onClick={() => setDismissed(true)}
-              className="flex-1 btn-ghost text-xs font-semibold"
-            >
-              Keep for Now
-            </button>
-          </div>
+        {showActions && (
+          <>
+            {/* Dead weight / snooze label when not a sentinel alert */}
+            {!isAlert && (isDead || isSnooze) && (
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-1.5 mb-2">
+                {isDead && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-600 border border-rose-200">
+                    Dead Weight
+                  </span>
+                )}
+                {isSnooze && !isDead && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 border border-amber-200">
+                    High CPH
+                  </span>
+                )}
+              </div>
+            )}
+
+            {cancelState === 'confirming' ? (
+              <div className={clsx('space-y-2', !isAlert && 'mt-2')}>
+                <div className="bg-rose-50 rounded-xl px-3 py-2.5 border border-rose-100">
+                  <p className="text-xs font-bold text-rose-700">
+                    Cancel {sub.name}?
+                  </p>
+                  <p className="text-xs text-rose-500 mt-0.5">
+                    Saves <span className="font-mono font-black">${sub.monthlyCost}/mo</span> ·{' '}
+                    <span className="font-mono font-black">${annualSavings}/yr</span>. This action cannot be undone.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCancelState('cancelled')}
+                    className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold font-display py-2 rounded-xl transition-all duration-200 active:scale-95"
+                  >
+                    Confirm Cancel
+                  </button>
+                  <button
+                    onClick={() => setCancelState('idle')}
+                    className="flex-1 btn-ghost text-xs font-semibold"
+                  >
+                    Go Back
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className={clsx('flex gap-2 pt-3 border-t border-gray-100', !isAlert ? 'mt-0' : 'mt-3')}>
+                {swept ? (
+                  <div
+                    className="flex-1 py-2 rounded-xl text-xs font-semibold text-center text-indigo-600"
+                    style={{ background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.2)' }}
+                  >
+                    Routed to portfolio ✓
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onSnoozeInvest(sub)}
+                    className="flex-1 text-xs font-bold font-display py-2 rounded-xl transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(99,102,241,0.08))',
+                      border: '1px solid rgba(124,58,237,0.3)',
+                      color: '#7c3aed',
+                    }}
+                  >
+                    ⚡ Snooze &amp; Invest
+                  </button>
+                )}
+                <button
+                  onClick={() => setCancelState('confirming')}
+                  className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold font-display py-2 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+                >
+                  Cancel Sub
+                </button>
+                {isAlert && !dismissed && (
+                  <button
+                    onClick={() => setDismissed(true)}
+                    className="flex-1 btn-ghost text-xs font-semibold"
+                  >
+                    Keep
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -185,7 +307,7 @@ function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop 
 function MetricBox({ label, value, sub, hot }) {
   return (
     <div className={clsx(
-      'rounded-2xl px-3 py-2.5 transition-all duration-200 hover:scale-105',
+      'rounded-2xl px-3 py-2.5 transition-all duration-200',
       hot ? 'bg-rose-50 border border-rose-100' : 'bg-violet-50 border border-violet-100'
     )}>
       <p className={clsx('font-mono text-sm font-black', hot ? 'text-rose-500' : 'text-gray-700')}>{value}</p>
@@ -197,7 +319,7 @@ function MetricBox({ label, value, sub, hot }) {
 
 function SummaryCard({ icon, label, value, color, bg }) {
   return (
-    <div className="card p-5 stagger-child hover:scale-105 transition-transform duration-200 cursor-default">
+    <div className="card p-5 stagger-child">
       <div className={clsx('w-11 h-11 rounded-2xl flex items-center justify-center mb-3 shadow-sm', bg)}>
         {icon}
       </div>
@@ -207,9 +329,45 @@ function SummaryCard({ icon, label, value, color, bg }) {
   )
 }
 
+// ── Portfolio insight cards ───────────────────────────────────────────────────
+
+function InsightCard({ icon, title, body, severity }) {
+  const styles = {
+    high:   { card: 'border-rose-200 bg-rose-50/50',   icon: 'bg-rose-100',   title: 'text-rose-700',   body: 'text-rose-500' },
+    medium: { card: 'border-amber-200 bg-amber-50/50', icon: 'bg-amber-100',  title: 'text-amber-700',  body: 'text-amber-600' },
+    low:    { card: 'border-violet-100 bg-violet-50/30', icon: 'bg-violet-100', title: 'text-violet-700', body: 'text-violet-500' },
+  }[severity] ?? {}
+
+  return (
+    <div className={clsx('card p-4 flex items-start gap-3', styles.card)}>
+      <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5', styles.icon)}>
+        {icon}
+      </div>
+      <div>
+        <p className={clsx('text-sm font-bold font-display', styles.title)}>{title}</p>
+        <p className={clsx('text-xs mt-0.5 leading-relaxed', styles.body)}>{body}</p>
+      </div>
+    </div>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+
 export default function AISentinel({
   subscriptions, profile, devMode, droppedIds, toggleDrop,
+  sweptSubIds = new Set(), onInvest,
 }) {
+  const [sweepTarget,  setSweepTarget]  = useState(null)
+  const [apiInsights,  setApiInsights]  = useState(null)  // null = not fetched yet
+  const [apiSource,    setApiSource]    = useState(false)  // true when using backend data
+
+  // Try to load insights from the Java backend; fall back to local computation
+  useEffect(() => {
+    fetchInsights()
+      .then(data => { setApiInsights(data); setApiSource(true) })
+      .catch(() => { setApiInsights(null); setApiSource(false) })
+  }, [subscriptions])
+
   const alerts = useMemo(
     () => subscriptions.filter((s) =>
       sentinelShouldAlert(s.renewalDate, s.usageLogs, profile.sentinelDropThreshold)
@@ -220,6 +378,84 @@ export default function AISentinel({
     (s) => !sentinelShouldAlert(s.renewalDate, s.usageLogs, profile.sentinelDropThreshold)
   )
 
+  // ── Portfolio-level insights (local fallback when backend offline) ────────
+  const localInsights = useMemo(() => {
+    const result = []
+
+    // Budget overflow
+    if (isBudgetOverflow(subscriptions, profile.monthlyBudget)) {
+      const over = subscriptions.reduce((s, x) => s + x.monthlyCost, 0) - profile.monthlyBudget
+      result.push({
+        id: 'budget',
+        severity: 'high',
+        icon: <DollarSign className="w-4 h-4 text-rose-500" />,
+        title: `Over Budget by $${over.toFixed(2)}/mo`,
+        body: `Your subscriptions total $${subscriptions.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo against a $${profile.monthlyBudget} budget. Cancel or snooze to get back on track.`,
+      })
+    }
+
+    // Category overlap
+    findCategoryOverlap(subscriptions).forEach(({ category, subs, totalCost }) => {
+      result.push({
+        id: `overlap-${category}`,
+        severity: 'medium',
+        icon: <Layers className="w-4 h-4 text-amber-500" />,
+        title: `${subs.length} ${category} subscriptions — $${totalCost.toFixed(2)}/mo`,
+        body: `${subs.map(s => s.name).join(', ')} overlap in the ${category} category. You may only need one.`,
+      })
+    })
+
+    // Binge-and-abandon
+    subscriptions.forEach((s) => {
+      if (isBingeAndAbandon(s.usageLogs)) {
+        result.push({
+          id: `binge-${s.id}`,
+          severity: 'medium',
+          icon: <TrendingDown className="w-4 h-4 text-amber-500" />,
+          title: `${s.name}: Binge & Abandon Pattern`,
+          body: `${s.name} saw heavy usage historically but has gone cold. You're paying $${s.monthlyCost}/mo for something you've stopped using.`,
+        })
+      }
+    })
+
+    // Chronic low usage
+    subscriptions.forEach((s) => {
+      if (hasChronicLowUsage(s.usageLogs)) {
+        result.push({
+          id: `chronic-${s.id}`,
+          severity: 'low',
+          icon: <AlertTriangle className="w-4 h-4 text-violet-500" />,
+          title: `${s.name}: Consistently Low Usage`,
+          body: `${s.name} averages under 8 min/day all month at $${s.monthlyCost}/mo. Consider whether it's worth keeping.`,
+        })
+      }
+    })
+
+    // High CPH not near renewal (catch subscriptions shouldSnooze misses in sentinel)
+    subscriptions.forEach((s) => {
+      const days = daysUntilRenewal(s.renewalDate)
+      const cph  = calcCostPerHour(s.monthlyCost, s.totalMinutes)
+      if (
+        shouldSnooze(s.monthlyCost, s.totalMinutes, profile.alertThresholdCPH) &&
+        days > 2 &&
+        !alerts.find(a => a.id === s.id)
+      ) {
+        result.push({
+          id: `cph-${s.id}`,
+          severity: 'low',
+          icon: <AlertCircle className="w-4 h-4 text-violet-500" />,
+          title: `${s.name}: High Cost-Per-Hour ($${cph === Infinity ? '∞' : cph}/hr)`,
+          body: `Above your $${profile.alertThresholdCPH}/hr threshold. Renews in ${days} days — watch this one.`,
+        })
+      }
+    })
+
+    return result
+  }, [subscriptions, profile, alerts])
+
+  // Use backend insights when available, local computation as fallback
+  const insights = apiInsights ?? localInsights
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -229,18 +465,18 @@ export default function AISentinel({
           AI Usage Sentinel
         </h2>
         <p className="text-gray-500 text-sm mt-1 font-medium">
-          Monitors usage trends and fires 48-hr warnings before costly renewals 🚨
+          Monitors usage trends, portfolio health, and fires smart alerts before costly renewals
         </p>
       </div>
 
       {/* Dev mode banner */}
       {devMode && (
-        <div className="card stagger-child p-4 border-amber-200 bg-amber-50 flex items-start gap-3" style={{ animationDelay: '0.05s' }}>
+        <div className="card stagger-child p-4 border-amber-200 bg-amber-50 flex items-start gap-3">
           <FlaskConical className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold font-display text-amber-700">Developer Mode Active 🧪</p>
+            <p className="text-sm font-bold font-display text-amber-700">Developer Mode Active</p>
             <p className="text-xs text-amber-600 mt-0.5">
-              Click "Drop Usage" on any card to zero out the last 10 days and trigger a live Sentinel alert!
+              Click "Drop Usage" on any card to zero out the last 10 days and trigger a live Sentinel alert.
             </p>
           </div>
         </div>
@@ -256,9 +492,9 @@ export default function AISentinel({
           bg="bg-rose-100"
         />
         <SummaryCard
-          icon={<Calendar className="w-5 h-5 text-amber-500" />}
-          label="Renewing ≤ 2 Days"
-          value={subscriptions.filter((s) => daysUntilRenewal(s.renewalDate) <= 2).length}
+          icon={<AlertTriangle className="w-5 h-5 text-amber-500" />}
+          label="Portfolio Insights"
+          value={insights.length}
           color="text-amber-500"
           bg="bg-amber-100"
         />
@@ -271,7 +507,7 @@ export default function AISentinel({
         />
       </div>
 
-      {/* Alerts first */}
+      {/* Urgent alerts */}
       {alerts.length > 0 && (
         <div className="stagger-child" style={{ animationDelay: '0.15s' }}>
           <div className="flex items-center gap-2 mb-4">
@@ -289,6 +525,33 @@ export default function AISentinel({
                 devMode={devMode}
                 isDropped={droppedIds.includes(sub.id)}
                 onToggleDrop={toggleDrop}
+                onSnoozeInvest={setSweepTarget}
+                swept={sweptSubIds.has(sub.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Portfolio insights */}
+      {insights.length > 0 && (
+        <div className="stagger-child" style={{ animationDelay: '0.18s' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            <h3 className="text-sm font-bold font-display text-gray-700">Portfolio Insights</h3>
+            <span className="badge badge-amber">{insights.length}</span>
+            {apiSource && (
+              <span className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                <Cpu className="w-3 h-3" /> Java API
+              </span>
+            )}
+          </div>
+          <div className="space-y-3">
+            {insights.map(insight => (
+              <InsightCard
+                key={insight.id}
+                {...insight}
+                icon={insight.icon ?? alertIcon(insight.type)}
               />
             ))}
           </div>
@@ -296,7 +559,7 @@ export default function AISentinel({
       )}
 
       {/* Monitoring */}
-      <div className="stagger-child" style={{ animationDelay: '0.20s' }}>
+      <div className="stagger-child" style={{ animationDelay: '0.22s' }}>
         <div className="flex items-center gap-2 mb-4">
           <Bell className="w-4 h-4 text-violet-500" />
           <h3 className="text-sm font-bold font-display text-gray-700">Monitoring</h3>
@@ -312,10 +575,20 @@ export default function AISentinel({
               devMode={devMode}
               isDropped={droppedIds.includes(sub.id)}
               onToggleDrop={toggleDrop}
+              onSnoozeInvest={setSweepTarget}
+              swept={sweptSubIds.has(sub.id)}
             />
           ))}
         </div>
       </div>
+
+      {sweepTarget && (
+        <RoutingModal
+          subscription={sweepTarget}
+          onClose={() => setSweepTarget(null)}
+          onInvest={onInvest}
+        />
+      )}
     </div>
   )
 }

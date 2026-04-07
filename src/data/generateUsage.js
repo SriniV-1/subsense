@@ -80,6 +80,27 @@ export function generateWeekendPattern(days = 30, avgMinutes = 90) {
 }
 
 /**
+ * Binge-and-abandon: heavy usage in the first half of the window,
+ * near-zero in the second half (New Year's-resolution pattern).
+ */
+export function generateBingeAbandonPattern(days = 30, peakMinutes = 90) {
+  const logs = []
+  const abandonAfter = Math.floor(days / 2)
+  for (let i = days - 1; i >= 0; i--) {
+    const date = format(subDays(new Date(), i), 'yyyy-MM-dd')
+    let minutes
+    if (i > abandonAfter) {
+      minutes = Math.random() < 0.15 ? 0
+        : Math.max(0, Math.round(peakMinutes * (0.6 + Math.random() * 0.8)))
+    } else {
+      minutes = Math.random() < 0.05 ? Math.round(5 + Math.random() * 10) : 0
+    }
+    logs.push({ date, minutes })
+  }
+  return logs
+}
+
+/**
  * For the AI Sentinel dev-mode: zero out the last N days.
  */
 export function dropRecentUsage(logs, zeroDays = 10) {

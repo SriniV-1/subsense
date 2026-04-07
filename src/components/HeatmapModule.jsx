@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { Flame, Info } from 'lucide-react'
+import { Flame, Info, X } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import {
   calcValueScore, calcCostPerHour, heatmapColor, shouldSnooze,
@@ -29,36 +29,41 @@ function HeatmapTooltip({ day }) {
   )
 }
 
-function UsageHeatmap({ usageLogs }) {
+function UsageHeatmap({ usageLogs, avgMinutes, onSelectDay, selectedKey }) {
   const [hovered, setHovered] = useState(null)
   const grid = useMemo(() => buildHeatmapGrid(usageLogs), [usageLogs])
 
   return (
     <div>
-      {/* Day labels */}
       <div className="grid grid-cols-7 gap-1 mb-1.5">
         {DAYS_OF_WEEK.map((d) => (
           <div key={d} className="text-center text-[10px] text-gray-400 font-bold">{d}</div>
         ))}
       </div>
 
-      {/* Cells */}
       {grid.map((week, wi) => (
         <div key={wi} className="grid grid-cols-7 gap-1 mb-1">
-          {week.map((day, di) => (
-            <div
-              key={di}
-              className="relative"
-              onMouseEnter={() => day.date && setHovered(`${wi}-${di}`)}
-              onMouseLeave={() => setHovered(null)}
-            >
-              <div className={clsx(
-                'heatmap-cell w-full aspect-square',
-                day.minutes === -1 ? 'opacity-0 pointer-events-none' : heatmapColor(day.minutes)
-              )} />
-              {hovered === `${wi}-${di}` && <HeatmapTooltip day={day} />}
-            </div>
-          ))}
+          {week.map((day, di) => {
+            const key = `${wi}-${di}`
+            const isSelected = selectedKey === key
+            return (
+              <div
+                key={di}
+                className="relative"
+                onMouseEnter={() => day.date && setHovered(key)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={() => day.date && onSelectDay(isSelected ? null : { day, key })}
+              >
+                <div className={clsx(
+                  'heatmap-cell w-full aspect-square transition-all duration-150',
+                  day.minutes === -1 ? 'opacity-0 pointer-events-none' : heatmapColor(day.minutes),
+                  day.date && 'cursor-pointer hover:opacity-80',
+                  isSelected && 'ring-2 ring-violet-500 ring-offset-1 scale-110 z-10 relative',
+                )} />
+                {hovered === key && !isSelected && <HeatmapTooltip day={day} />}
+              </div>
+            )
+          })}
         </div>
       ))}
 
@@ -69,7 +74,49 @@ function UsageHeatmap({ usageLogs }) {
           <div key={i} className={clsx('w-4 h-4 rounded-md', heatmapColor(m))} />
         ))}
         <span className="text-[10px] text-gray-400 font-semibold">More</span>
+        <span className="text-[10px] text-gray-400 ml-2 font-medium italic">· click a cell for details</span>
       </div>
+    </div>
+  )
+}
+
+// Day detail panel shown when a cell is clicked
+function DayDetailPanel({ day, avgMinutes, monthlyCost, onClose }) {
+  const minutes   = day.minutes
+  const vs        = avgMinutes > 0 ? ((minutes - avgMinutes) / avgMinutes) * 100 : 0
+  const dateLabel = day.date ? format(parseISO(day.date), 'EEEE, MMMM d yyyy') : ''
+  const cphDay    = minutes > 0 ? (monthlyCost / 30) / (minutes / 60) : null
+
+  return (
+    <div className="card p-4 border-violet-200 bg-violet-50/40 relative">
+      <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600">
+        <X className="w-4 h-4" />
+      </button>
+      <p className="text-xs font-bold uppercase tracking-widest text-violet-400 mb-2">Day Detail</p>
+      <p className="text-sm font-bold font-display text-gray-700 mb-3">{dateLabel}</p>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white rounded-xl px-3 py-2 text-center shadow-sm">
+          <p className="font-mono text-base font-black text-violet-600">{minutes}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">minutes</p>
+        </div>
+        <div className="bg-white rounded-xl px-3 py-2 text-center shadow-sm">
+          <p className={clsx('font-mono text-base font-black', vs > 0 ? 'text-emerald-600' : vs < -20 ? 'text-rose-500' : 'text-gray-600')}>
+            {vs > 0 ? '+' : ''}{vs.toFixed(0)}%
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">vs avg</p>
+        </div>
+        <div className="bg-white rounded-xl px-3 py-2 text-center shadow-sm">
+          <p className={clsx('font-mono text-base font-black', cphDay === null ? 'text-rose-400' : 'text-gray-700')}>
+            {cphDay === null ? '∞' : `$${cphDay.toFixed(2)}`}
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">cost/hr</p>
+        </div>
+      </div>
+      {minutes === 0 && (
+        <p className="text-[11px] text-rose-500 font-medium mt-2 text-center">
+          Zero usage — ${(monthlyCost / 30).toFixed(2)} spent with nothing to show for it.
+        </p>
+      )}
     </div>
   )
 }
@@ -101,16 +148,17 @@ function Chip({ label, value, color }) {
 }
 
 export default function HeatmapModule({ subscriptions, profile }) {
-  const [selectedId, setSelectedId] = useState(subscriptions[0]?.id)
-  const selected = subscriptions.find((s) => s.id === selectedId)
+  const [selectedId,  setSelectedId]  = useState(subscriptions[0]?.id)
+  const [selectedDay, setSelectedDay] = useState(null)   // { day, key }
 
+  const selected   = subscriptions.find((s) => s.id === selectedId)
   const cph        = selected ? calcCostPerHour(selected.monthlyCost, selected.totalMinutes) : 0
   const valueScore = selected ? calcValueScore(selected.totalMinutes, selected.monthlyCost) : 0
   const snooze     = selected ? shouldSnooze(selected.monthlyCost, selected.totalMinutes, profile.alertThresholdCPH) : false
 
   const trendData = selected
     ? selected.usageLogs.slice(-14).map((l) => ({
-        date: l.date ? format(parseISO(l.date), 'MMM d') : '',
+        date:    l.date ? format(parseISO(l.date), 'MMM d') : '',
         minutes: l.minutes,
       }))
     : []
@@ -118,6 +166,11 @@ export default function HeatmapModule({ subscriptions, profile }) {
   const avgMinutes = selected
     ? selected.usageLogs.reduce((s, l) => s + l.minutes, 0) / selected.usageLogs.length
     : 0
+
+  function handleSelectSub(id) {
+    setSelectedId(id)
+    setSelectedDay(null)
+  }
 
   return (
     <div className="space-y-6">
@@ -128,7 +181,7 @@ export default function HeatmapModule({ subscriptions, profile }) {
           Utilization Heatmap
         </h2>
         <p className="text-gray-500 text-sm mt-1 font-medium">
-          30-day usage patterns — spot dead zones and binge spikes 🔥
+          30-day usage patterns — click any day cell for a breakdown
         </p>
       </div>
 
@@ -145,7 +198,7 @@ export default function HeatmapModule({ subscriptions, profile }) {
             return (
               <button
                 key={sub.id}
-                onClick={() => setSelectedId(sub.id)}
+                onClick={() => handleSelectSub(sub.id)}
                 className={clsx(
                   'w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-all duration-200',
                   active
@@ -172,11 +225,10 @@ export default function HeatmapModule({ subscriptions, profile }) {
           })}
         </div>
 
-        {/* Right: heatmap + trend */}
+        {/* Right: heatmap + detail + trend */}
         <div className="xl:col-span-2 space-y-4">
           {selected && (
             <>
-              {/* Snooze alert */}
               {snooze && (
                 <div className="alert-snooze flex items-start gap-3 stagger-child">
                   <span className="text-2xl animate-wiggle">😴</span>
@@ -184,11 +236,8 @@ export default function HeatmapModule({ subscriptions, profile }) {
                     <p className="text-sm font-bold font-display text-amber-700">Snooze Suggestion</p>
                     <p className="text-xs text-amber-600 mt-0.5">
                       {selected.name} costs{' '}
-                      <span className="font-mono font-black">
-                        ${cph === Infinity ? '∞' : cph}/hr
-                      </span>{' '}
+                      <span className="font-mono font-black">${cph === Infinity ? '∞' : cph}/hr</span>{' '}
                       — above your ${profile.alertThresholdCPH}/hr threshold.
-                      Consider pausing this one for a while!
                     </p>
                   </div>
                 </div>
@@ -196,7 +245,7 @@ export default function HeatmapModule({ subscriptions, profile }) {
 
               {/* Heatmap card */}
               <div className="card p-5 stagger-child" style={{ animationDelay: '0.15s' }}>
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl">{selected.icon}</span>
                     <div>
@@ -204,25 +253,41 @@ export default function HeatmapModule({ subscriptions, profile }) {
                       <p className="text-xs text-gray-400">{selected.category} · ${selected.monthlyCost}/mo</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Chip label="Value Score" value={valueScore.toFixed(3)} color="violet" />
                     <Chip
                       label="Cost/hr"
                       value={`$${cph === Infinity ? '∞' : cph}`}
                       color={cph > profile.alertThresholdCPH ? 'red' : 'emerald'}
                     />
-                    <Chip label="Hours/mo" value={(selected.totalMinutes / 60).toFixed(1)} color="slate" />
+                    <Chip label="Avg/day" value={`${avgMinutes.toFixed(0)}m`} color="slate" />
                   </div>
                 </div>
-                <UsageHeatmap usageLogs={selected.usageLogs} />
+
+                <UsageHeatmap
+                  usageLogs={selected.usageLogs}
+                  avgMinutes={avgMinutes}
+                  onSelectDay={setSelectedDay}
+                  selectedKey={selectedDay?.key}
+                />
               </div>
+
+              {/* Day detail panel — shown when a cell is selected */}
+              {selectedDay && (
+                <DayDetailPanel
+                  day={selectedDay.day}
+                  avgMinutes={avgMinutes}
+                  monthlyCost={selected.monthlyCost}
+                  onClose={() => setSelectedDay(null)}
+                />
+              )}
 
               {/* 14-day trend */}
               <div className="card p-5 stagger-child" style={{ animationDelay: '0.20s' }}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-bold font-display text-gray-700">14-Day Usage Trend</h3>
                   <div className="flex items-center gap-1 text-xs text-gray-400 font-medium">
-                    <Info className="w-3.5 h-3.5" /> Daily minutes
+                    <Info className="w-3.5 h-3.5" /> Daily minutes · dashed = avg
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={160}>

@@ -10,5 +10,11 @@ export const fetchDashboard      = ()    => api.get('/api/dashboard')
 export const fetchProfile        = ()    => api.get('/api/profile')
 export const fetchSwapOptions    = ()    => api.get('/api/swap-options')
 
-export const snoozeSubscription  = (id)  => api.post(`/api/subscriptions/${id}/snooze`)
-export const cancelSubscription  = (id)  => api.post(`/api/subscriptions/${id}/cancel`)
+export const snoozeSubscription  = (id)                 => api.post(`/api/subscriptions/${id}/snooze`)
+export const cancelSubscription  = (id)                 => api.post(`/api/subscriptions/${id}/cancel`)
+export const snoozeAndSweep      = (id, ticker = 'VOO') =>
+  api.post(`/api/subscriptions/${id}/snooze-and-sweep?ticker=${ticker}`)
+
+// Backend-computed intelligence (Java InsightsController)
+export const fetchInsights         = () => api.get('/api/insights')
+export const fetchRecommendations  = () => api.get('/api/recommendations')
