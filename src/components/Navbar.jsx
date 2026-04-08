@@ -16,6 +16,7 @@ const navItems = [
   { to: '/investments', icon: TrendingUp,      label: 'Investments',      color: 'text-indigo-600',  bg: 'bg-indigo-100' },
 ]
 
+
 export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds = new Set(), profile, investmentCount = 0 }) {
   const alertCount = subscriptions.filter((s) =>
     sentinelShouldAlert(s.renewalDate, s.usageLogs, profile.sentinelDropThreshold)
@@ -146,6 +147,7 @@ export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds
             )}
           </NavLink>
         ))}
+
       </nav>
 
       {/* Dev mode toggle */}

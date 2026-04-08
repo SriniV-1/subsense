@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import { TrendingUp, DollarSign, Layers, Calendar } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+} from 'recharts'
 import clsx from 'clsx'
 
 const TICKER_COLORS = {
@@ -21,6 +24,125 @@ function projectedValue(monthlyAmount, years = 10) {
   const r = 0.10 / 12
   const n = years * 12
   return monthlyAmount * ((Math.pow(1 + r, n) - 1) / r)
+}
+
+function buildChartData(monthlyAmount) {
+  const r = 0.10 / 12
+  const data = []
+  for (let month = 0; month <= 120; month += 3) {
+    const contributed = monthlyAmount * month
+    const value = month === 0 ? 0 : monthlyAmount * ((Math.pow(1 + r, month) - 1) / r)
+    data.push({
+      month,
+      label: month === 0 ? 'Now' : month % 12 === 0 ? `Yr ${month / 12}` : null,
+      contributed: Math.round(contributed),
+      value: Math.round(value),
+    })
+  }
+  return data
+}
+
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  const contributed = payload.find(p => p.dataKey === 'contributed')
+  const value       = payload.find(p => p.dataKey === 'value')
+  const gain        = value && contributed ? value.value - contributed.value : 0
+  return (
+    <div className="bg-white border border-violet-100 rounded-2xl px-4 py-3 text-xs shadow-card-hover">
+      <p className="font-bold font-display text-gray-700 mb-2">{label}</p>
+      {contributed && (
+        <p className="text-indigo-500 font-semibold">Contributed: <span className="font-mono font-black">${contributed.value.toLocaleString()}</span></p>
+      )}
+      {value && (
+        <p className="text-emerald-600 font-semibold">Portfolio value: <span className="font-mono font-black">${value.value.toLocaleString()}</span></p>
+      )}
+      {gain > 0 && (
+        <p className="text-violet-600 font-semibold mt-1">Gain: <span className="font-mono font-black">+${gain.toLocaleString()}</span></p>
+      )}
+    </div>
+  )
+}
+
+function GrowthChart({ monthlyAmount }) {
+  const data = useMemo(() => buildChartData(monthlyAmount), [monthlyAmount])
+  const maxVal = data[data.length - 1]?.value ?? 0
+
+  return (
+    <div className="card p-6">
+      <div className="mb-5">
+        <h3 className="font-bold font-display text-gray-800">Investment Value vs. Money In</h3>
+        <p className="text-xs text-gray-400 mt-0.5">
+          ${monthlyAmount.toFixed(2)}/mo compounding at 10% annual return over 10 years
+        </p>
+      </div>
+      <ResponsiveContainer width="100%" height={260}>
+        <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gradValue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+            </linearGradient>
+            <linearGradient id="gradContrib" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.20} />
+              <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(196,181,253,0.25)" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fill: '#9ca3af', fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            interval={0}
+            tickFormatter={v => v ?? ''}
+          />
+          <YAxis
+            tick={{ fill: '#9ca3af', fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={v => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`}
+            width={48}
+          />
+          <Tooltip content={<ChartTooltip />} />
+          <Area
+            type="monotone"
+            dataKey="contributed"
+            name="Contributed"
+            stroke="#6366f1"
+            strokeWidth={2}
+            fill="url(#gradContrib)"
+            dot={false}
+            activeDot={{ r: 4, fill: '#6366f1', strokeWidth: 0 }}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            name="Portfolio Value"
+            stroke="#10b981"
+            strokeWidth={2.5}
+            fill="url(#gradValue)"
+            dot={false}
+            activeDot={{ r: 4, fill: '#10b981', strokeWidth: 0 }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+      {/* Legend */}
+      <div className="flex items-center gap-6 mt-4 justify-center">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-0.5 bg-indigo-500 rounded-full" />
+          <span className="text-xs text-gray-500 font-medium">Money contributed</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-0.5 bg-emerald-500 rounded-full" />
+          <span className="text-xs text-gray-500 font-medium">Portfolio value</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-2 bg-emerald-100 rounded-sm border border-emerald-200" />
+          <span className="text-xs text-gray-500 font-medium">Compound gain</span>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function StatCard({ icon, label, value, sub, color }) {
@@ -51,6 +173,8 @@ export default function InvestmentTracker({ investments, subscriptions }) {
     return Object.entries(map).map(([ticker, amount]) => ({ ticker, amount }))
   }, [investments])
 
+  const totalSubscriptionSpend = subscriptions.reduce((s, sub) => s + sub.monthlyCost, 0)
+
   if (investments.length === 0) {
     return (
       <div className="space-y-6">
@@ -64,15 +188,23 @@ export default function InvestmentTracker({ investments, subscriptions }) {
           </p>
         </div>
 
-        <div className="card p-16 text-center flex flex-col items-center">
-          <div className="w-16 h-16 rounded-3xl bg-indigo-100 flex items-center justify-center mb-4">
-            <TrendingUp className="w-8 h-8 text-indigo-400" />
+        <div className="card p-8 text-center flex flex-col items-center">
+          <div className="w-14 h-14 rounded-3xl bg-indigo-100 flex items-center justify-center mb-3">
+            <TrendingUp className="w-7 h-7 text-indigo-400" />
           </div>
           <p className="font-bold font-display text-gray-700 text-lg">No investments yet</p>
-          <p className="text-gray-400 text-sm mt-2 max-w-sm leading-relaxed">
-            Go to the Dashboard or AI Sentinel, find a flagged subscription, and hit
+          <p className="text-gray-400 text-sm mt-1.5 max-w-sm leading-relaxed">
+            Find a flagged subscription on the Dashboard or AI Sentinel and hit
             <span className="font-semibold text-violet-600"> ⚡ Snooze &amp; Invest</span> to route funds here.
           </p>
+        </div>
+
+        {/* What-if chart using full subscription spend */}
+        <div>
+          <p className="text-xs text-gray-400 font-medium px-1 mb-3">
+            💡 What if you redirected your full ${totalSubscriptionSpend.toFixed(0)}/mo subscription spend?
+          </p>
+          <GrowthChart monthlyAmount={totalSubscriptionSpend} />
         </div>
       </div>
     )
@@ -225,19 +357,24 @@ export default function InvestmentTracker({ investments, subscriptions }) {
         </div>
       </div>
 
-      {/* 10yr growth table */}
+      {/* Growth chart */}
+      <GrowthChart monthlyAmount={totalMonthly} />
+
+      {/* Milestone snapshots */}
       <div className="card p-6">
-        <h3 className="font-bold font-display text-gray-800 mb-1">Projected Growth</h3>
-        <p className="text-xs text-gray-400 mb-4">Monthly routing at 10% avg annual return</p>
+        <h3 className="font-bold font-display text-gray-800 mb-1">Value Milestones</h3>
+        <p className="text-xs text-gray-400 mb-4">Portfolio value vs. total contributed at each checkpoint</p>
         <div className="grid grid-cols-4 gap-3">
           {[1, 3, 5, 10].map(years => {
-            const pv = projectedValue(totalMonthly, years)
-            const multiple = totalMonthly > 0 ? pv / (totalMonthly * 12 * years) : 1
+            const pv          = projectedValue(totalMonthly, years)
+            const contributed = totalMonthly * 12 * years
+            const gain        = pv - contributed
             return (
-              <div key={years} className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl p-3 text-center border border-violet-100">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-400 mb-1">{years}yr</p>
-                <p className="text-lg font-black font-mono text-gray-800">${Math.round(pv).toLocaleString()}</p>
-                <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">{multiple.toFixed(1)}× return</p>
+              <div key={years} className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl p-3 border border-violet-100">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-400 mb-2">{years}yr</p>
+                <p className="text-lg font-black font-mono text-emerald-600">${Math.round(pv).toLocaleString()}</p>
+                <p className="text-[10px] text-gray-400 font-mono mt-0.5">in: ${Math.round(contributed).toLocaleString()}</p>
+                <p className="text-[10px] text-violet-600 font-semibold">+${Math.round(gain).toLocaleString()} gain</p>
               </div>
             )
           })}

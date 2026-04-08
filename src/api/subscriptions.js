@@ -23,3 +23,8 @@ export const fetchRecommendations  = () => api.get('/api/recommendations')
 export const fetchPortfolioSummary = () => api.get('/api/portfolio/summary')
 export const fetchFlagged          = () => api.get('/api/portfolio/flagged')
 export const fetchUpcomingRenewals = () => api.get('/api/portfolio/renewals')
+
+// Java-powered advanced analytics
+export const fetchForecasts        = ()               => api.get('/api/forecasts')
+export const fetchOptimizationPlan = (budget)         => api.get(`/api/optimizer/plan${budget ? `?budget=${budget}` : ''}`)
+export const fetchBenchmarks       = ()               => api.get('/api/benchmarks')
