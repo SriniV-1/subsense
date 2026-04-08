@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { TrendingUp, DollarSign, Layers, Calendar } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts'
 import clsx from 'clsx'
 
@@ -30,34 +30,36 @@ function buildChartData(monthlyAmount) {
   const r = 0.10 / 12
   const data = []
   for (let month = 0; month <= 120; month += 3) {
-    const contributed = monthlyAmount * month
+    // Money spent goes negative — cumulative outflow
+    const spent = -(monthlyAmount * month)
+    // Portfolio value grows upward
     const value = month === 0 ? 0 : monthlyAmount * ((Math.pow(1 + r, month) - 1) / r)
     data.push({
       month,
       label: month === 0 ? 'Now' : month % 12 === 0 ? `Yr ${month / 12}` : null,
-      contributed: Math.round(contributed),
-      value: Math.round(value),
+      spent:  Math.round(spent),
+      value:  Math.round(value),
     })
   }
   return data
 }
 
-function ChartTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
-  const contributed = payload.find(p => p.dataKey === 'contributed')
-  const value       = payload.find(p => p.dataKey === 'value')
-  const gain        = value && contributed ? value.value - contributed.value : 0
+  const spentEntry = payload.find(p => p.dataKey === 'spent')
+  const valueEntry = payload.find(p => p.dataKey === 'value')
+  const spent = spentEntry ? Math.abs(spentEntry.value) : 0
+  const value = valueEntry ? valueEntry.value : 0
+  const gain  = value - spent
   return (
     <div className="bg-white border border-violet-100 rounded-2xl px-4 py-3 text-xs shadow-card-hover">
-      <p className="font-bold font-display text-gray-700 mb-2">{label}</p>
-      {contributed && (
-        <p className="text-indigo-500 font-semibold">Contributed: <span className="font-mono font-black">${contributed.value.toLocaleString()}</span></p>
-      )}
-      {value && (
-        <p className="text-emerald-600 font-semibold">Portfolio value: <span className="font-mono font-black">${value.value.toLocaleString()}</span></p>
-      )}
+      <p className="font-bold font-display text-gray-700 mb-2">{payload[0]?.payload?.label ?? ''}</p>
+      <p className="text-rose-500 font-semibold">Spent: <span className="font-mono font-black">−${spent.toLocaleString()}</span></p>
+      <p className="text-emerald-600 font-semibold">Portfolio: <span className="font-mono font-black">+${value.toLocaleString()}</span></p>
       {gain > 0 && (
-        <p className="text-violet-600 font-semibold mt-1">Gain: <span className="font-mono font-black">+${gain.toLocaleString()}</span></p>
+        <p className="text-violet-600 font-semibold mt-1.5 border-t border-violet-100 pt-1.5">
+          Net gain: <span className="font-mono font-black">+${gain.toLocaleString()}</span>
+        </p>
       )}
     </div>
   )
@@ -65,29 +67,31 @@ function ChartTooltip({ active, payload, label }) {
 
 function GrowthChart({ monthlyAmount }) {
   const data = useMemo(() => buildChartData(monthlyAmount), [monthlyAmount])
-  const maxVal = data[data.length - 1]?.value ?? 0
+  const maxValue = data[data.length - 1]?.value ?? 0
+  const minSpent = data[data.length - 1]?.spent ?? 0   // most negative
 
   return (
     <div className="card p-6">
       <div className="mb-5">
-        <h3 className="font-bold font-display text-gray-800">Investment Value vs. Money In</h3>
+        <h3 className="font-bold font-display text-gray-800">Investment Growth vs. Money Spent</h3>
         <p className="text-xs text-gray-400 mt-0.5">
-          ${monthlyAmount.toFixed(2)}/mo compounding at 10% annual return over 10 years
+          ${monthlyAmount.toFixed(2)}/mo · 10% avg annual return · 10-year horizon
         </p>
       </div>
-      <ResponsiveContainer width="100%" height={260}>
-        <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height={280}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="gradValue" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.30} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0.03} />
             </linearGradient>
-            <linearGradient id="gradContrib" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.20} />
-              <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+            <linearGradient id="gradSpent" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="5%"  stopColor="#f43f5e" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.03} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(196,181,253,0.25)" vertical={false} />
+          <ReferenceLine y={0} stroke="rgba(139,92,246,0.3)" strokeWidth={1.5} strokeDasharray="4 3" />
           <XAxis
             dataKey="label"
             tick={{ fill: '#9ca3af', fontSize: 10 }}
@@ -100,20 +104,27 @@ function GrowthChart({ monthlyAmount }) {
             tick={{ fill: '#9ca3af', fontSize: 10 }}
             tickLine={false}
             axisLine={false}
-            tickFormatter={v => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`}
-            width={48}
+            tickFormatter={v => {
+              const abs = Math.abs(v)
+              const str = abs >= 1000 ? `$${(abs / 1000).toFixed(0)}k` : `$${abs}`
+              return v < 0 ? `−${str}` : str
+            }}
+            width={52}
+            domain={[minSpent * 1.1, maxValue * 1.1]}
           />
           <Tooltip content={<ChartTooltip />} />
+          {/* Spent — fills downward into negative territory */}
           <Area
             type="monotone"
-            dataKey="contributed"
-            name="Contributed"
-            stroke="#6366f1"
+            dataKey="spent"
+            name="Money Spent"
+            stroke="#f43f5e"
             strokeWidth={2}
-            fill="url(#gradContrib)"
+            fill="url(#gradSpent)"
             dot={false}
-            activeDot={{ r: 4, fill: '#6366f1', strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: '#f43f5e', strokeWidth: 0 }}
           />
+          {/* Portfolio value — fills upward */}
           <Area
             type="monotone"
             dataKey="value"
@@ -127,18 +138,14 @@ function GrowthChart({ monthlyAmount }) {
         </AreaChart>
       </ResponsiveContainer>
       {/* Legend */}
-      <div className="flex items-center gap-6 mt-4 justify-center">
+      <div className="flex items-center gap-6 mt-3 justify-center">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-0.5 bg-indigo-500 rounded-full" />
-          <span className="text-xs text-gray-500 font-medium">Money contributed</span>
+          <div className="w-3 h-0.5 bg-rose-400 rounded-full" />
+          <span className="text-xs text-gray-500 font-medium">Money spent (out)</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-0.5 bg-emerald-500 rounded-full" />
-          <span className="text-xs text-gray-500 font-medium">Portfolio value</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-2 bg-emerald-100 rounded-sm border border-emerald-200" />
-          <span className="text-xs text-gray-500 font-medium">Compound gain</span>
+          <span className="text-xs text-gray-500 font-medium">Portfolio value (in)</span>
         </div>
       </div>
     </div>
@@ -362,19 +369,19 @@ export default function InvestmentTracker({ investments, subscriptions }) {
 
       {/* Milestone snapshots */}
       <div className="card p-6">
-        <h3 className="font-bold font-display text-gray-800 mb-1">Value Milestones</h3>
-        <p className="text-xs text-gray-400 mb-4">Portfolio value vs. total contributed at each checkpoint</p>
+        <h3 className="font-bold font-display text-gray-800 mb-1">Milestones</h3>
+        <p className="text-xs text-gray-400 mb-4">What you've spent vs. what you've built</p>
         <div className="grid grid-cols-4 gap-3">
           {[1, 3, 5, 10].map(years => {
-            const pv          = projectedValue(totalMonthly, years)
-            const contributed = totalMonthly * 12 * years
-            const gain        = pv - contributed
+            const pv    = projectedValue(totalMonthly, years)
+            const spent = totalMonthly * 12 * years
+            const gain  = pv - spent
             return (
-              <div key={years} className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl p-3 border border-violet-100">
+              <div key={years} className="rounded-2xl p-3 border border-violet-100 bg-gradient-to-br from-violet-50 to-white">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-violet-400 mb-2">{years}yr</p>
-                <p className="text-lg font-black font-mono text-emerald-600">${Math.round(pv).toLocaleString()}</p>
-                <p className="text-[10px] text-gray-400 font-mono mt-0.5">in: ${Math.round(contributed).toLocaleString()}</p>
-                <p className="text-[10px] text-violet-600 font-semibold">+${Math.round(gain).toLocaleString()} gain</p>
+                <p className="text-base font-black font-mono text-emerald-600">+${Math.round(pv).toLocaleString()}</p>
+                <p className="text-[10px] font-mono text-rose-400 font-semibold mt-0.5">−${Math.round(spent).toLocaleString()} spent</p>
+                <p className="text-[10px] text-violet-500 font-semibold mt-0.5">+${Math.round(gain).toLocaleString()} gain</p>
               </div>
             )
           })}
