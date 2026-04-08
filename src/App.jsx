@@ -21,6 +21,7 @@ export default function App() {
 
   // ── Centralized investment state (shared across Dashboard, Sentinel, Tracker) ──
   const [investments, setInvestments] = useState([])
+  const [snoozedIds,  setSnoozedIds]  = useState(new Set())
 
   function addInvestment(sub, trade) {
     setInvestments(prev => {
@@ -37,7 +38,14 @@ export default function App() {
     })
   }
 
+  function addSnooze(id) {
+    setSnoozedIds(prev => new Set([...prev, id]))
+  }
+
+  // sweptSubIds = investment-backed snoozes only (drives InvestmentTracker)
+  // inactiveIds = all removed from active spend (swept + snooze-only)
   const sweptSubIds = new Set(investments.map(inv => inv.subId))
+  const inactiveIds = new Set([...sweptSubIds, ...snoozedIds])
 
   useEffect(() => {
     Promise.all([fetchSubscriptions(), fetchProfile()])
@@ -76,7 +84,7 @@ export default function App() {
         droppedIds={droppedIds}
         toggleDrop={toggleDrop}
         subscriptions={displayedSubs}
-        sweptSubIds={sweptSubIds}
+        sweptSubIds={inactiveIds}
         profile={profile}
         investmentCount={investments.length}
       />
@@ -91,9 +99,10 @@ export default function App() {
                   subscriptions={displayedSubs}
                   profile={profile}
                   devMode={devMode}
-                  sweptSubIds={sweptSubIds}
+                  sweptSubIds={inactiveIds}
                   investments={investments}
                   onInvest={addInvestment}
+                  onSnooze={addSnooze}
                 />
               }
             />
@@ -114,7 +123,7 @@ export default function App() {
                   devMode={devMode}
                   droppedIds={droppedIds}
                   toggleDrop={toggleDrop}
-                  sweptSubIds={sweptSubIds}
+                  sweptSubIds={inactiveIds}
                   onInvest={addInvestment}
                 />
               }
@@ -129,7 +138,7 @@ export default function App() {
                 <FlaggedView
                   subscriptions={displayedSubs}
                   profile={profile}
-                  sweptSubIds={sweptSubIds}
+                  sweptSubIds={inactiveIds}
                   investments={investments}
                   onInvest={addInvestment}
                 />
@@ -140,7 +149,7 @@ export default function App() {
               element={
                 <RenewalCalendar
                   subscriptions={displayedSubs}
-                  sweptSubIds={sweptSubIds}
+                  sweptSubIds={inactiveIds}
                   profile={profile}
                   onInvest={addInvestment}
                 />

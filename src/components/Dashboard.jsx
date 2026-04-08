@@ -328,7 +328,7 @@ function KPIDetailModal({ type, enriched, profile, spend, avgCPH, onClose }) {
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 
-export default function Dashboard({ subscriptions, profile, sweptSubIds = new Set(), investments = [], onInvest }) {
+export default function Dashboard({ subscriptions, profile, sweptSubIds = new Set(), investments = [], onInvest, onSnooze }) {
   const normalizedScores = useMemo(() => normalizeScores(subscriptions), [subscriptions])
   const [sweepTarget,    setSweepTarget]    = useState(null)
   const [detailSub,      setDetailSub]      = useState(null)
@@ -798,6 +798,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
                 swept={sweptSubIds.has(sub.id)}
                 investment={investmentMap[sub.id]}
                 onSnoozeInvest={setSweepTarget}
+                onSnooze={onSnooze}
                 onOpenDetail={setDetailSub}
                 onVsInspect={setVsTarget}
               />
@@ -891,9 +892,10 @@ const GRADE_STYLES = {
   'Dead Weight': 'badge-rose',
 }
 
-function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onOpenDetail, onVsInspect }) {
+function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSnooze, onOpenDetail, onVsInspect }) {
   const [hovered, setHovered] = useState(false)
-  const flagged   = sub.snooze || sub.dead || sub.grade?.label === 'Dead Weight'
+  const isDead    = sub.dead || sub.grade?.label === 'Dead Weight'
+  const flagged   = sub.snooze || isDead
   const ctaAccent = (sub.accentColor === '#ffffff' || sub.accentColor === '#fff') ? '#818cf8' : sub.accentColor
 
   return (
@@ -998,6 +1000,25 @@ function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onOpe
           style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}
         >
           Routed to index portfolio ✓
+        </div>
+      ) : isDead ? (
+        <div className="mt-3 flex gap-2" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => onSnooze?.(sub.id)}
+            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 active:scale-[0.98] bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100"
+          >
+            Snooze
+          </button>
+          <button
+            onClick={() => onSnoozeInvest(sub)}
+            className="relative flex-1 py-2 rounded-xl text-xs font-bold tracking-wide transition-all duration-200 group overflow-hidden active:scale-[0.98]"
+            style={{ background: `${ctaAccent}18`, border: `1px solid ${ctaAccent}40`, color: ctaAccent }}
+          >
+            <span className="relative z-10 flex items-center justify-center gap-1">
+              ⚡ &amp; Invest
+            </span>
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: `${ctaAccent}12` }} />
+          </button>
         </div>
       ) : flagged ? (
         <button
