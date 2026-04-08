@@ -337,6 +337,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
   const [apiSource,      setApiSource]      = useState(false)
   const [vsTarget,          setVsTarget]          = useState(null)   // value score inspect
   const [expandedCategory,  setExpandedCategory]  = useState(null)   // category expand
+  const [subSort,           setSubSort]           = useState('default')
 
   useEffect(() => {
     fetchPortfolioSummary()
@@ -748,22 +749,59 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
 
       {/* Subscription grid */}
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-violet-400 mb-4">
-          All Subscriptions — click to inspect
-        </h3>
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-violet-400">
+            All Subscriptions — click to inspect
+          </h3>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[
+              { key: 'default',     label: 'Default' },
+              { key: 'cph-high',    label: '$/hr ↑' },
+              { key: 'cph-low',     label: '$/hr ↓' },
+              { key: 'grade-best',  label: 'Grade ↑' },
+              { key: 'grade-worst', label: 'Grade ↓' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setSubSort(opt.key)}
+                className={clsx(
+                  'px-3 py-1 rounded-xl text-xs font-semibold font-display transition-all duration-150',
+                  subSort === opt.key
+                    ? 'bg-violet-100 text-violet-700'
+                    : 'text-gray-400 hover:bg-violet-50 hover:text-violet-500'
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {enriched.map((sub, i) => (
-            <SubscriptionCard
-              key={sub.id}
-              sub={sub}
-              index={i}
-              swept={sweptSubIds.has(sub.id)}
-              investment={investmentMap[sub.id]}
-              onSnoozeInvest={setSweepTarget}
-              onOpenDetail={setDetailSub}
-              onVsInspect={setVsTarget}
-            />
-          ))}
+          {[...enriched]
+            .sort((a, b) => {
+              const GRADE_ORDER = { 'Excellent': 0, 'Good': 1, 'Fair': 2, 'Poor': 3, 'Dead Weight': 4 }
+              const cphA = a.cph < 0 ? Infinity : a.cph
+              const cphB = b.cph < 0 ? Infinity : b.cph
+              const gradeA = GRADE_ORDER[a.grade?.label ?? a.grade] ?? 4
+              const gradeB = GRADE_ORDER[b.grade?.label ?? b.grade] ?? 4
+              if (subSort === 'cph-high')    return cphB - cphA
+              if (subSort === 'cph-low')     return cphA - cphB
+              if (subSort === 'grade-best')  return gradeA - gradeB
+              if (subSort === 'grade-worst') return gradeB - gradeA
+              return 0
+            })
+            .map((sub, i) => (
+              <SubscriptionCard
+                key={sub.id}
+                sub={sub}
+                index={i}
+                swept={sweptSubIds.has(sub.id)}
+                investment={investmentMap[sub.id]}
+                onSnoozeInvest={setSweepTarget}
+                onOpenDetail={setDetailSub}
+                onVsInspect={setVsTarget}
+              />
+            ))}
         </div>
       </div>
 
