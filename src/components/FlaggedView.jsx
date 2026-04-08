@@ -322,17 +322,17 @@ export default function FlaggedView({ subscriptions, profile, sweptSubIds = new 
           </div>
         </div>
         <p className="text-gray-500 text-sm font-medium ml-[52px]">
-          {flagged.length} subscription{flagged.length !== 1 ? 's' : ''} need attention
+          {flagged.filter(s => !sweptSubIds.has(s.id)).length} subscription{flagged.filter(s => !sweptSubIds.has(s.id)).length !== 1 ? 's' : ''} need attention
         </p>
       </div>
 
       {/* ── Summary strip ────────────────────────────────────────────────── */}
-      {flagged.length > 0 && (
+      {flagged.filter(s => !sweptSubIds.has(s.id)).length > 0 && (
         <div className="grid grid-cols-3 gap-3 stagger-child">
           {[
-            { label: 'Total Flagged',    value: flagged.length,              mono: false, color: 'text-rose-600',   bg: 'bg-rose-50',   border: 'border-rose-100' },
-            { label: 'Recoverable / mo', value: `$${totalRecoverable.toFixed(2)}`, mono: true,  color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100' },
-            { label: 'Annual Waste',     value: `$${(totalRecoverable * 12).toFixed(0)}`, mono: true, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100' },
+            { label: 'Needs Attention',  value: flagged.filter(s => !sweptSubIds.has(s.id)).length, mono: false, color: 'text-rose-600',   bg: 'bg-rose-50',   border: 'border-rose-100' },
+            { label: 'Recoverable / mo', value: `$${totalRecoverable.toFixed(2)}`,                  mono: true,  color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100' },
+            { label: 'Annual Waste',     value: `$${(totalRecoverable * 12).toFixed(0)}`,            mono: true,  color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100' },
           ].map(({ label, value, mono, color, bg, border }) => (
             <div key={label} className={clsx('rounded-2xl p-4 border', bg, border)}>
               <p className={clsx('text-xl font-black', mono ? 'font-mono' : 'font-display', color)}>{value}</p>
@@ -344,7 +344,7 @@ export default function FlaggedView({ subscriptions, profile, sweptSubIds = new 
 
       {/* ── Sections ─────────────────────────────────────────────────────── */}
       {SECTIONS.map(section => {
-        const items = flagged.filter(section.filter)
+        const items = flagged.filter(section.filter).filter(s => !sweptSubIds.has(s.id))
         if (items.length === 0) return null
         return (
           <div key={section.key} className="stagger-child">
@@ -374,7 +374,7 @@ export default function FlaggedView({ subscriptions, profile, sweptSubIds = new 
       })}
 
       {/* ── Empty state ───────────────────────────────────────────────────── */}
-      {flagged.length === 0 && (
+      {flagged.filter(s => !sweptSubIds.has(s.id)).length === 0 && (
         <div
           className="rounded-3xl p-14 text-center stagger-child"
           style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.15)' }}

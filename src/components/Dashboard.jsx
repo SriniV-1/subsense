@@ -751,7 +751,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
       <div>
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
           <h3 className="text-xs font-bold uppercase tracking-widest text-violet-400">
-            All Subscriptions — click to inspect
+            Active Subscriptions — click to inspect
           </h3>
           <div className="flex items-center gap-1.5 flex-wrap">
             {[
@@ -776,8 +776,11 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
             ))}
           </div>
         </div>
+
+        {/* Active subscriptions — not yet snoozed or invested */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...enriched]
+            .filter(sub => !sweptSubIds.has(sub.id))
             .sort((a, b) => {
               const GRADE_ORDER = { 'Excellent': 0, 'Good': 1, 'Fair': 2, 'Poor': 3, 'Dead Weight': 4 }
               const cphA = a.cph < 0 ? Infinity : a.cph
@@ -795,8 +798,8 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
                 key={sub.id}
                 sub={sub}
                 index={i}
-                swept={sweptSubIds.has(sub.id)}
-                investment={investmentMap[sub.id]}
+                swept={false}
+                investment={null}
                 onSnoozeInvest={setSweepTarget}
                 onSnooze={onSnooze}
                 onOpenDetail={setDetailSub}
@@ -804,6 +807,15 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
               />
             ))}
         </div>
+
+        {/* Handled section — snoozed or invested, collapsible */}
+        {enriched.some(sub => sweptSubIds.has(sub.id)) && (
+          <HandledSection
+            subs={enriched.filter(sub => sweptSubIds.has(sub.id))}
+            investmentMap={investmentMap}
+            onOpenDetail={setDetailSub}
+          />
+        )}
       </div>
 
       {/* Routing modal */}
@@ -890,6 +902,53 @@ const GRADE_STYLES = {
   'Fair':        'badge-amber',
   'Poor':        'badge-rose',
   'Dead Weight': 'badge-rose',
+}
+
+function HandledSection({ subs, investmentMap, onOpenDetail }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-6">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-violet-500 transition-colors mb-3"
+      >
+        <ChevronRight className={clsx('w-3.5 h-3.5 transition-transform duration-200', open && 'rotate-90')} />
+        Handled ({subs.length})
+      </button>
+      {open && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {subs.map(sub => {
+            const inv = investmentMap[sub.id]
+            return (
+              <div
+                key={sub.id}
+                className="card p-4 opacity-60 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => onOpenDetail(sub)}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{sub.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold font-display text-gray-600 text-sm truncate line-through">{sub.name}</p>
+                    <p className="text-xs text-gray-400">{sub.category}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-mono text-sm font-bold text-gray-400">${sub.monthlyCost}/mo</p>
+                    {inv ? (
+                      <span className="badge badge-violet text-[10px] mt-1">
+                        {inv.trade.ticker ?? inv.trade.brokerage} ✓
+                      </span>
+                    ) : (
+                      <span className="badge badge-emerald text-[10px] mt-1">Snoozed</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSnooze, onOpenDetail, onVsInspect }) {
