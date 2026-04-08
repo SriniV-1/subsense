@@ -180,8 +180,6 @@ export default function InvestmentTracker({ investments, subscriptions }) {
     return Object.entries(map).map(([ticker, amount]) => ({ ticker, amount }))
   }, [investments])
 
-  const totalSubscriptionSpend = subscriptions.reduce((s, sub) => s + sub.monthlyCost, 0)
-
   if (investments.length === 0) {
     return (
       <div className="space-y-6">
@@ -195,7 +193,7 @@ export default function InvestmentTracker({ investments, subscriptions }) {
           </p>
         </div>
 
-        <div className="card p-8 text-center flex flex-col items-center">
+        <div className="card p-16 text-center flex flex-col items-center">
           <div className="w-14 h-14 rounded-3xl bg-indigo-100 flex items-center justify-center mb-3">
             <TrendingUp className="w-7 h-7 text-indigo-400" />
           </div>
@@ -204,14 +202,6 @@ export default function InvestmentTracker({ investments, subscriptions }) {
             Find a flagged subscription on the Dashboard or AI Sentinel and hit
             <span className="font-semibold text-violet-600"> ⚡ Snooze &amp; Invest</span> to route funds here.
           </p>
-        </div>
-
-        {/* What-if chart using full subscription spend */}
-        <div>
-          <p className="text-xs text-gray-400 font-medium px-1 mb-3">
-            💡 What if you redirected your full ${totalSubscriptionSpend.toFixed(0)}/mo subscription spend?
-          </p>
-          <GrowthChart monthlyAmount={totalSubscriptionSpend} />
         </div>
       </div>
     )
