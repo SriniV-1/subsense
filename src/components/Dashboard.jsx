@@ -197,7 +197,7 @@ function SubscriptionDetailModal({ sub, onClose, onSnoozeInvest, swept, onVsInsp
               className="w-full py-3 rounded-2xl font-bold text-sm text-white transition-all duration-200 active:scale-95"
               style={{ background: `linear-gradient(135deg, ${accent}, #4f46e5)`, boxShadow: `0 4px 20px ${accent}30` }}
             >
-              {(sub.snooze || sub.dead || sub.grade?.label === 'Dead Weight') ? '⚡ Snooze & Invest' : '↗ Invest'} ${sub.monthlyCost.toFixed(2)}
+              {(sub.snooze || sub.dead) ? '⚡ Snooze & Invest' : '↗ Invest'} ${sub.monthlyCost.toFixed(2)}
             </button>
           )}
           {swept && (
@@ -371,7 +371,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
     [subscriptions, normalizedScores, profile]
   )
 
-  const flagged     = enriched.filter(s => s.snooze || s.dead || s.grade?.label === 'Dead Weight')
+  const flagged     = enriched.filter(s => s.snooze || s.dead)
   const unswept     = flagged.filter(s => !sweptSubIds.has(s.id))
   const reclaimable = unswept.reduce((sum, s) => sum + s.monthlyCost, 0)
 
@@ -382,7 +382,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
   const totalHours   = activeSubs.reduce((s, e) => s + e.totalMinutes / 60, 0)
   const avgCPH       = spend / (totalHours || 1)
   const snoozeCount  = activeSubs.filter(s => s.snooze).length
-  const deadCount    = activeSubs.filter(s => s.dead || s.grade?.label === 'Dead Weight').length
+  const deadCount    = activeSubs.filter(s => s.dead).length
 
   const portfolioStats = useMemo(() => {
     const best = [...enriched].sort((a, b) => b.valueScore - a.valueScore)[0]
@@ -403,7 +403,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
       if (!groups[sub.category]) groups[sub.category] = { category: sub.category, count: 0, totalCost: 0, deadWeightCount: 0 }
       groups[sub.category].count++
       groups[sub.category].totalCost += sub.monthlyCost
-      if (sub.dead || valueGrade(sub.normScore).label === 'Dead Weight') groups[sub.category].deadWeightCount++
+      if (sub.dead) groups[sub.category].deadWeightCount++
     })
     return Object.values(groups)
       .map(g => ({ ...g, pctOfTotal: total > 0 ? (g.totalCost / total) * 100 : 0 }))
@@ -429,7 +429,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
     }
 
     // Dead weight: -5 per sub, max -20
-    const deadCount = activeSubs.filter(s => s.dead || s.grade?.label === 'Dead Weight').length
+    const deadCount = activeSubs.filter(s => s.dead).length
     score -= Math.min(20, deadCount * 5)
 
     // Sentinel alerts: -8 per alert, max -16
@@ -440,7 +440,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
 
     // Snooze-only (not dead/sentinel): -2 per, max -10
     const snoozeOnly = activeSubs.filter(s =>
-      s.snooze && !s.dead && s.grade?.label !== 'Dead Weight'
+      s.snooze && !s.dead && !s.dead
     ).length
     score -= Math.min(10, snoozeOnly * 2)
 
@@ -638,7 +638,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
                     <div className="ml-9 mb-1 border-l-2 border-violet-100 pl-3 space-y-0.5">
                       {catSubs.map(sub => {
                         const gradeLabel = valueGrade(sub.normScore).label
-                        const isDead  = sub.dead || gradeLabel === 'Dead Weight'
+                        const isDead  = sub.dead
                         return (
                           <div
                             key={sub.id}
@@ -829,7 +829,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
           <div className="flex items-center gap-2 flex-wrap">
             {/* Batch action — dead weight */}
             {(() => {
-              const unsweptDead = activeSubs.filter(s => s.dead || s.grade?.label === 'Dead Weight')
+              const unsweptDead = activeSubs.filter(s => s.dead)
               if (unsweptDead.length === 0) return null
               return (
                 <button
@@ -870,7 +870,7 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
           {[...enriched]
             .filter(sub => !sweptSubIds.has(sub.id))
             .sort((a, b) => {
-              const GRADE_ORDER = { 'Excellent': 0, 'Good': 1, 'Fair': 2, 'Poor': 3, 'Dead Weight': 4 }
+              const GRADE_ORDER = { 'Excellent': 0, 'Good': 1, 'Fair': 2, 'Poor': 3, 'Very Poor': 4 }
               const cphA = a.cph < 0 ? Infinity : a.cph
               const cphB = b.cph < 0 ? Infinity : b.cph
               const gradeA = GRADE_ORDER[a.grade?.label ?? a.grade] ?? 4
@@ -999,7 +999,7 @@ const GRADE_STYLES = {
   'Good':        'badge-sky',
   'Fair':        'badge-amber',
   'Poor':        'badge-rose',
-  'Dead Weight': 'badge-rose',
+  'Very Poor': 'badge-rose',
 }
 
 function HandledSection({ subs, investmentMap, onOpenDetail }) {
@@ -1069,7 +1069,7 @@ function HandledSection({ subs, investmentMap, onOpenDetail }) {
 function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSnooze, onOpenDetail, onVsInspect }) {
   const [hovered,     setHovered]     = useState(false)
   const [cancelState, setCancelState] = useState('idle')   // 'idle' | 'confirming' | 'cancelled'
-  const isDead    = sub.dead || sub.grade?.label === 'Dead Weight'
+  const isDead    = sub.dead
   const flagged   = sub.snooze || isDead
   const ctaAccent = (sub.accentColor === '#ffffff' || sub.accentColor === '#fff') ? '#818cf8' : sub.accentColor
 

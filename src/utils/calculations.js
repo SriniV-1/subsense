@@ -116,11 +116,11 @@ export function heatmapColor(minutes) {
  * Grade label for a value score (0-100 normalized).
  */
 export function valueGrade(normalizedScore) {
-  if (normalizedScore >= 80) return { label: 'Excellent', color: 'text-emerald-400' }
-  if (normalizedScore >= 60) return { label: 'Good', color: 'text-green-400' }
-  if (normalizedScore >= 40) return { label: 'Fair', color: 'text-amber-400' }
-  if (normalizedScore >= 20) return { label: 'Poor', color: 'text-orange-400' }
-  return { label: 'Dead Weight', color: 'text-red-400' }
+  if (normalizedScore >= 80) return { label: 'Excellent',  color: 'text-emerald-400' }
+  if (normalizedScore >= 60) return { label: 'Good',       color: 'text-green-400' }
+  if (normalizedScore >= 40) return { label: 'Fair',       color: 'text-amber-400' }
+  if (normalizedScore >= 20) return { label: 'Poor',       color: 'text-orange-400' }
+  return                            { label: 'Very Poor',  color: 'text-red-400' }
 }
 
 /**

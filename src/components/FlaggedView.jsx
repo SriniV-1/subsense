@@ -288,9 +288,7 @@ export default function FlaggedView({ subscriptions, profile, sweptSubIds = new 
       if (sentinelShouldAlert(sub.renewalDate, sub.usageLogs, profile.sentinelDropThreshold))
         issues.push('sentinel')
 
-      // Dead weight: either literally zero usage OR grade = "Dead Weight" (low normalized score)
-      // This matches the Dashboard badge which shows "Dead Weight" for both cases
-      if (isDeadWeight(sub.usageLogs) || grade.label === 'Dead Weight')
+      if (isDeadWeight(sub.usageLogs))
         issues.push('dead')
 
       if (shouldSnooze(sub.monthlyCost, sub.totalMinutes, profile.alertThresholdCPH) && !issues.includes('sentinel'))
@@ -303,8 +301,8 @@ export default function FlaggedView({ subscriptions, profile, sweptSubIds = new 
         issues.push('low_usage')
 
       // Poor grade = bottom 20th percentile by value score, not already caught above
-      if (grade.label === 'Poor' && !issues.includes('dead') && !issues.includes('snooze') &&
-          !issues.includes('binge_abandon') && !issues.includes('low_usage'))
+      if ((grade.label === 'Poor' || grade.label === 'Very Poor') && !issues.includes('dead') &&
+          !issues.includes('snooze') && !issues.includes('binge_abandon') && !issues.includes('low_usage'))
         issues.push('poor_grade')
 
       return { ...sub, issues }

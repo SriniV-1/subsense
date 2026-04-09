@@ -9,7 +9,7 @@ const GRADE_STYLE = {
   'Good':        { bar: '#0ea5e9', text: 'text-sky-600',     bg: 'bg-sky-50 border-sky-200' },
   'Fair':        { bar: '#f59e0b', text: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200' },
   'Poor':        { bar: '#f97316', text: 'text-orange-600',  bg: 'bg-orange-50 border-orange-200' },
-  'Dead Weight': { bar: '#ef4444', text: 'text-rose-600',    bg: 'bg-rose-50 border-rose-200' },
+  'Very Poor':   { bar: '#ef4444', text: 'text-rose-600',    bg: 'bg-rose-50 border-rose-200' },
 }
 
 // ── Calculation step ──────────────────────────────────────────────────────────

@@ -33,7 +33,7 @@ export default function Onboarding({ subscriptions, profile, onDone }) {
       grade: valueGrade(scores[i]),
     }))
     const totalSpend   = enriched.reduce((s, e) => s + e.monthlyCost, 0)
-    const deadWeight   = enriched.filter(e => e.dead || e.grade?.label === 'Dead Weight')
+    const deadWeight   = enriched.filter(e => e.dead)
     const reclaimable  = deadWeight.reduce((s, e) => s + e.monthlyCost, 0)
     const highCph      = enriched.filter(e => e.cph !== Infinity && e.cph > profile.alertThresholdCPH)
     const projection   = projectedValue(reclaimable)

@@ -74,7 +74,7 @@ function SentinelCard({ sub, profile, isAlert, devMode, isDropped, onToggleDrop,
   const [cancelState, setCancelState] = useState('idle') // idle | confirming | cancelled
   const [dismissed,   setDismissed]   = useState(false)
 
-  const isDead    = isDeadWeight(sub.usageLogs) || valueGrade(normScore).label === 'Dead Weight'
+  const isDead    = isDeadWeight(sub.usageLogs) 
   const isSnooze  = shouldSnooze(sub.monthlyCost, sub.totalMinutes, profile.alertThresholdCPH)
   const showActions = (isAlert && !dismissed) || isDead || isSnooze
 
