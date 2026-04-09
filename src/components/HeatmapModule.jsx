@@ -69,11 +69,11 @@ function UsageHeatmap({ usageLogs, avgMinutes, onSelectDay, selectedKey }) {
 
       {/* Legend */}
       <div className="flex items-center gap-2 mt-3">
-        <span className="text-[10px] text-gray-400 font-semibold">Less</span>
+        <span className="text-[10px] text-gray-400 font-semibold">None</span>
         {[0, 15, 45, 90, 150].map((m, i) => (
           <div key={i} className={clsx('w-4 h-4 rounded-md', heatmapColor(m))} />
         ))}
-        <span className="text-[10px] text-gray-400 font-semibold">More</span>
+        <span className="text-[10px] text-gray-400 font-semibold">High</span>
         <span className="text-[10px] text-gray-400 ml-2 font-medium italic">· click a cell for details</span>
       </div>
     </div>
