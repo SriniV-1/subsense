@@ -21,9 +21,10 @@ export default function App() {
   const [droppedIds, setDroppedIds]       = useState([])
 
   // ── Centralized investment state (shared across Dashboard, Sentinel, Tracker) ──
-  const [investments, setInvestments] = useState([])
-  const [snoozedIds,  setSnoozedIds]  = useState(new Set())
+  const [investments,    setInvestments]    = useState([])
+  const [snoozedIds,     setSnoozedIds]     = useState(new Set())
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [usageWindow,    setUsageWindow]    = useState('30d')   // '30d' | 'all'
 
   function addInvestment(sub, trade) {
     setInvestments(prev => {
@@ -66,11 +67,16 @@ export default function App() {
   }, [])
 
   const displayedSubs = subscriptions.map((sub) => {
+    let result = sub
     if (devMode && droppedIds.includes(sub.id)) {
       const zeroed = dropRecentUsage(sub.usageLogs, 10)
-      return { ...sub, usageLogs: zeroed, totalMinutes: 0 }
+      result = { ...result, usageLogs: zeroed, totalMinutes: 0 }
     }
-    return sub
+    if (usageWindow === '30d') {
+      const minutes30d = result.usageLogs.slice(-30).reduce((s, l) => s + l.minutes, 0)
+      result = { ...result, totalMinutes: minutes30d }
+    }
+    return result
   })
 
   function toggleDrop(id) {
@@ -102,6 +108,8 @@ export default function App() {
         sweptSubIds={inactiveIds}
         profile={profile}
         investmentCount={investments.length}
+        usageWindow={usageWindow}
+        setUsageWindow={setUsageWindow}
         onReplayOnboarding={() => {
           localStorage.removeItem('subsense_onboarded')
           setShowOnboarding(true)

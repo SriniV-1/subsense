@@ -17,7 +17,7 @@ const navItems = [
 ]
 
 
-export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds = new Set(), profile, investmentCount = 0, onReplayOnboarding }) {
+export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds = new Set(), profile, investmentCount = 0, onReplayOnboarding, usageWindow, setUsageWindow }) {
   const alertCount = subscriptions.filter((s) =>
     sentinelShouldAlert(s.renewalDate, s.usageLogs, profile.sentinelDropThreshold)
   ).length
@@ -178,6 +178,29 @@ export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds
             Drop usage on Sentinel tab to trigger live alerts
           </p>
         )}
+        {/* Usage window toggle */}
+        {setUsageWindow && (
+          <div className="mt-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 px-1 mb-1.5">Usage Window</p>
+            <div className="flex bg-gray-100 rounded-xl p-0.5 gap-0.5">
+              {[{ key: '30d', label: 'Last 30 Days' }, { key: 'all', label: 'All Time' }].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setUsageWindow(opt.key)}
+                  className={clsx(
+                    'flex-1 py-1.5 rounded-[10px] text-[10px] font-bold font-display transition-all duration-200',
+                    usageWindow === opt.key
+                      ? 'bg-white text-violet-700 shadow-sm'
+                      : 'text-gray-400 hover:text-gray-600'
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {onReplayOnboarding && (
           <button
             onClick={onReplayOnboarding}
