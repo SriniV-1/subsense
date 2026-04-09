@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Flame, ArrowLeftRight, Bell,
-  Sparkles, FlaskConical, TrendingUp, Flag, CalendarDays,
+  Sparkles, FlaskConical, TrendingUp, Flag, CalendarDays, PlayCircle,
 } from 'lucide-react'
 import { sentinelShouldAlert, isDeadWeight, shouldSnooze, isBingeAndAbandon, daysUntilRenewal } from '../utils/calculations.js'
 import clsx from 'clsx'
@@ -17,7 +17,7 @@ const navItems = [
 ]
 
 
-export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds = new Set(), profile, investmentCount = 0 }) {
+export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds = new Set(), profile, investmentCount = 0, onReplayOnboarding }) {
   const alertCount = subscriptions.filter((s) =>
     sentinelShouldAlert(s.renewalDate, s.usageLogs, profile.sentinelDropThreshold)
   ).length
@@ -177,6 +177,15 @@ export default function Navbar({ devMode, setDevMode, subscriptions, sweptSubIds
           <p className="text-[10px] text-amber-500 mt-2 px-1 leading-snug font-medium">
             Drop usage on Sentinel tab to trigger live alerts
           </p>
+        )}
+        {onReplayOnboarding && (
+          <button
+            onClick={onReplayOnboarding}
+            className="mt-2 w-full flex items-center gap-2 px-3 py-2 rounded-2xl text-xs font-semibold font-display text-gray-400 hover:text-violet-500 hover:bg-violet-50 border border-transparent hover:border-violet-200 transition-all duration-200"
+          >
+            <PlayCircle className="w-3.5 h-3.5 shrink-0" />
+            Replay Intro
+          </button>
         )}
       </div>
     </aside>

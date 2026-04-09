@@ -8,7 +8,7 @@ import AISentinel from './components/AISentinel.jsx'
 import InvestmentTracker from './components/InvestmentTracker.jsx'
 import FlaggedView from './components/FlaggedView.jsx'
 import RenewalCalendar from './components/RenewalCalendar.jsx'
-import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx'
+import Onboarding, { shouldShowOnboarding, markOnboarded } from './components/Onboarding.jsx'
 import { fetchSubscriptions, fetchProfile } from './api/subscriptions.js'
 import { subscriptions as mockSubs, userProfile as mockProfile } from './data/mockData.js'
 import { dropRecentUsage } from './data/generateUsage.js'
@@ -102,6 +102,10 @@ export default function App() {
         sweptSubIds={inactiveIds}
         profile={profile}
         investmentCount={investments.length}
+        onReplayOnboarding={() => {
+          localStorage.removeItem('subsense_onboarded')
+          setShowOnboarding(true)
+        }}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-8">
