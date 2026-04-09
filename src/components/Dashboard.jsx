@@ -1004,8 +1004,8 @@ const GRADE_STYLES = {
 
 function HandledSection({ subs, investmentMap, onOpenDetail }) {
   const [open, setOpen] = useState(true)
-  const investedCount = subs.filter(s => investmentMap[s.id]).length
-  const snoozedCount  = subs.length - investedCount
+  const investedCount   = subs.filter(s => investmentMap[s.id]).length
+  const cancelledCount  = subs.length - investedCount
   const totalFreed    = subs.reduce((sum, s) => sum + s.monthlyCost, 0)
 
   return (
@@ -1021,8 +1021,8 @@ function HandledSection({ subs, investmentMap, onOpenDetail }) {
           </span>
         </div>
         <div className="flex items-center gap-3 text-[11px] font-mono">
-          {snoozedCount > 0 && (
-            <span className="text-emerald-600 font-semibold">{snoozedCount} snoozed</span>
+          {cancelledCount > 0 && (
+            <span className="text-emerald-600 font-semibold">{cancelledCount} cancelled</span>
           )}
           {investedCount > 0 && (
             <span className="text-violet-600 font-semibold">{investedCount} invested</span>
@@ -1053,7 +1053,7 @@ function HandledSection({ subs, investmentMap, onOpenDetail }) {
                         {inv.trade.ticker ?? inv.trade.brokerage} ✓
                       </span>
                     ) : (
-                      <span className="badge badge-emerald text-[10px] mt-1">Snoozed</span>
+                      <span className="badge badge-emerald text-[10px] mt-1">Cancelled</span>
                     )}
                   </div>
                 </div>
@@ -1067,7 +1067,8 @@ function HandledSection({ subs, investmentMap, onOpenDetail }) {
 }
 
 function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSnooze, onOpenDetail, onVsInspect }) {
-  const [hovered, setHovered] = useState(false)
+  const [hovered,     setHovered]     = useState(false)
+  const [cancelState, setCancelState] = useState('idle')   // 'idle' | 'confirming' | 'cancelled'
   const isDead    = sub.dead || sub.grade?.label === 'Dead Weight'
   const flagged   = sub.snooze || isDead
   const ctaAccent = (sub.accentColor === '#ffffff' || sub.accentColor === '#fff') ? '#818cf8' : sub.accentColor
@@ -1176,23 +1177,47 @@ function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSno
           Routed to index portfolio ✓
         </div>
       ) : isDead ? (
-        <div className="mt-3 flex gap-2" onClick={e => e.stopPropagation()}>
-          <button
-            onClick={() => onSnooze?.(sub.id)}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 active:scale-[0.98] bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100"
-          >
-            Snooze
-          </button>
-          <button
-            onClick={() => onSnoozeInvest(sub)}
-            className="relative flex-1 py-2 rounded-xl text-xs font-bold tracking-wide transition-all duration-200 group overflow-hidden active:scale-[0.98]"
-            style={{ background: `${ctaAccent}18`, border: `1px solid ${ctaAccent}40`, color: ctaAccent }}
-          >
-            <span className="relative z-10 flex items-center justify-center gap-1">
-              ⚡ &amp; Invest
-            </span>
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: `${ctaAccent}12` }} />
-          </button>
+        <div className="mt-3" onClick={e => e.stopPropagation()}>
+          {cancelState === 'confirming' ? (
+            <div className="space-y-2">
+              <div className="bg-rose-50 rounded-xl px-3 py-2 border border-rose-100 text-xs text-rose-700 font-semibold">
+                Cancel {sub.name}? Saves ${sub.monthlyCost}/mo.
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setCancelState('cancelled'); onSnooze?.(sub.id) }}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white transition-all active:scale-[0.98]"
+                >
+                  Yes, Cancel
+                </button>
+                <button
+                  onClick={() => setCancelState('idle')}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all"
+                >
+                  Go Back
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCancelState('confirming')}
+                className="flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 active:scale-[0.98] bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => onSnoozeInvest(sub)}
+                className="relative flex-1 py-2 rounded-xl text-xs font-bold tracking-wide transition-all duration-200 group overflow-hidden active:scale-[0.98]"
+                style={{ background: `${ctaAccent}18`, border: `1px solid ${ctaAccent}40`, color: ctaAccent }}
+              >
+                <span className="relative z-10 flex items-center justify-center gap-1">
+                  ⚡ Snooze &amp; Invest
+                </span>
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: `${ctaAccent}12` }} />
+              </button>
+            </div>
+          )}
         </div>
       ) : flagged ? (
         <button

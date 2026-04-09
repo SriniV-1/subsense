@@ -32,14 +32,14 @@ function projectedValue(monthlyAmount, years = 10) {
 export default function BatchActionModal({ subs, onSnooze, onInvest, onClose }) {
   // action per sub: 'snooze' | 'invest'
   const [actions, setActions] = useState(() =>
-    Object.fromEntries(subs.map(s => [s.id, 'snooze']))
+    Object.fromEntries(subs.map(s => [s.id, 'cancel']))
   )
   const [ticker, setTicker] = useState('VOO')
   const [done,   setDone]   = useState(false)
 
-  const investSubs = subs.filter(s => actions[s.id] === 'invest')
-  const snoozeSubs = subs.filter(s => actions[s.id] === 'snooze')
-  const totalMonthly = subs.reduce((sum, s) => sum + s.monthlyCost, 0)
+  const investSubs  = subs.filter(s => actions[s.id] === 'invest')
+  const cancelSubs  = subs.filter(s => actions[s.id] === 'cancel')
+  const totalMonthly  = subs.reduce((sum, s) => sum + s.monthlyCost, 0)
   const investMonthly = investSubs.reduce((sum, s) => sum + s.monthlyCost, 0)
 
   function setAll(action) {
@@ -47,11 +47,11 @@ export default function BatchActionModal({ subs, onSnooze, onInvest, onClose }) 
   }
 
   function toggle(id) {
-    setActions(prev => ({ ...prev, [id]: prev[id] === 'snooze' ? 'invest' : 'snooze' }))
+    setActions(prev => ({ ...prev, [id]: prev[id] === 'cancel' ? 'invest' : 'cancel' }))
   }
 
   function confirm() {
-    snoozeSubs.forEach(s => onSnooze(s.id))
+    cancelSubs.forEach(s => onSnooze(s.id))
     investSubs.forEach(s => {
       const trade = mockTrade(s.monthlyCost, ticker)
       onInvest(s, trade)
@@ -99,8 +99,8 @@ export default function BatchActionModal({ subs, onSnooze, onInvest, onClose }) 
               </div>
               <p className="font-black font-display text-gray-800 text-lg">Done</p>
               <div className="text-sm text-gray-500 space-y-1">
-                {snoozeSubs.length > 0 && (
-                  <p>{snoozeSubs.length} snoozed · ${snoozeSubs.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo freed</p>
+                {cancelSubs.length > 0 && (
+                  <p>{cancelSubs.length} cancelled · ${cancelSubs.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo freed</p>
                 )}
                 {investSubs.length > 0 && (
                   <p>{investSubs.length} invested → {ticker} · ${investMonthly.toFixed(2)}/mo</p>
@@ -118,15 +118,15 @@ export default function BatchActionModal({ subs, onSnooze, onInvest, onClose }) 
               {/* Bulk toggles */}
               <div className="flex gap-2">
                 <button
-                  onClick={() => setAll('snooze')}
+                  onClick={() => setAll('cancel')}
                   className={clsx(
                     'flex-1 py-2 rounded-xl text-xs font-bold font-display border transition-all duration-150 flex items-center justify-center gap-1.5',
-                    snoozeSubs.length === subs.length
+                    cancelSubs.length === subs.length
                       ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                       : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-emerald-200 hover:text-emerald-600'
                   )}
                 >
-                  <BedDouble className="w-3.5 h-3.5" /> All Snooze
+                  <BedDouble className="w-3.5 h-3.5" /> All Cancel
                 </button>
                 <button
                   onClick={() => setAll('invest')}
@@ -137,7 +137,7 @@ export default function BatchActionModal({ subs, onSnooze, onInvest, onClose }) 
                       : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-violet-200 hover:text-violet-600'
                   )}
                 >
-                  <TrendingUp className="w-3.5 h-3.5" /> All Invest
+                  <TrendingUp className="w-3.5 h-3.5" /> All Snooze &amp; Invest
                 </button>
               </div>
 
@@ -169,13 +169,13 @@ export default function BatchActionModal({ subs, onSnooze, onInvest, onClose }) 
                           'px-2.5 py-1.5 text-[10px] font-bold font-display transition-all duration-150',
                           !isInvest ? 'bg-emerald-500 text-white' : 'text-gray-400 bg-white hover:bg-gray-50'
                         )}>
-                          Snooze
+                          Cancel
                         </div>
                         <div className={clsx(
                           'px-2.5 py-1.5 text-[10px] font-bold font-display transition-all duration-150',
                           isInvest ? 'bg-violet-500 text-white' : 'text-gray-400 bg-white hover:bg-gray-50'
                         )}>
-                          Invest
+                          Snooze &amp; Invest
                         </div>
                       </div>
                     </div>
@@ -214,11 +214,11 @@ export default function BatchActionModal({ subs, onSnooze, onInvest, onClose }) 
               {/* Summary + confirm */}
               <div className="space-y-3">
                 <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-xs space-y-1.5">
-                  {snoozeSubs.length > 0 && (
+                  {cancelSubs.length > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Snoozed</span>
+                      <span className="text-gray-500">Cancelled</span>
                       <span className="font-mono font-bold text-emerald-600">
-                        {snoozeSubs.length} · ${snoozeSubs.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo freed
+                        {cancelSubs.length} · ${cancelSubs.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo freed
                       </span>
                     </div>
                   )}

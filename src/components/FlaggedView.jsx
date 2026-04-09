@@ -238,7 +238,7 @@ function FlaggedCard({ sub, issues, swept, investment, onInvest, profile }) {
                 color: accent,
               }}
             >
-              ⚡ Invest ${sub.monthlyCost.toFixed(2)}
+              ⚡ Snooze &amp; Invest ${sub.monthlyCost.toFixed(2)}
             </button>
             <button
               onClick={() => setCancelState('confirming')}
