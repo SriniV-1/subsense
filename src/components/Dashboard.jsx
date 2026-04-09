@@ -1178,6 +1178,12 @@ function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSno
       ) : isDead ? (
         <div className="mt-3 flex gap-2" onClick={e => e.stopPropagation()}>
           <button
+            onClick={() => onSnooze?.(sub.id)}
+            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 active:scale-[0.98] bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100"
+          >
+            Snooze
+          </button>
+          <button
             onClick={() => onSnoozeInvest(sub)}
             className="relative flex-1 py-2 rounded-xl text-xs font-bold tracking-wide transition-all duration-200 group overflow-hidden active:scale-[0.98]"
             style={{ background: `${ctaAccent}18`, border: `1px solid ${ctaAccent}40`, color: ctaAccent }}
