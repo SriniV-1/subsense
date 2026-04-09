@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   isDeadWeight, shouldSnooze, sentinelShouldAlert,
-  isBingeAndAbandon, calcCostPerHour, daysUntilRenewal,
+  isBingeAndAbandon, hasChronicLowUsage, calcCostPerHour, daysUntilRenewal,
   normalizeScores, valueGrade,
 } from '../utils/calculations.js'
 import RoutingModal from './RoutingModal.jsx'
@@ -43,7 +43,8 @@ const SECTIONS = [
     badge: 'badge-amber',
     borderCard: 'border-amber-100',
     filter: (s) =>
-      (s.issues.includes('snooze') || s.issues.includes('binge_abandon')) &&
+      (s.issues.includes('snooze') || s.issues.includes('binge_abandon') ||
+       s.issues.includes('low_usage') || s.issues.includes('poor_grade')) &&
       !s.issues.includes('dead') &&
       !s.issues.includes('sentinel'),
   },
@@ -56,6 +57,8 @@ const ISSUE_STYLES = {
   dead:         'bg-rose-100 text-rose-600 border-rose-200',
   snooze:       'bg-amber-100 text-amber-600 border-amber-200',
   binge_abandon:'bg-amber-100 text-amber-600 border-amber-200',
+  low_usage:    'bg-amber-100 text-amber-600 border-amber-200',
+  poor_grade:   'bg-orange-100 text-orange-600 border-orange-200',
 }
 
 const ISSUE_LABELS = {
@@ -63,6 +66,8 @@ const ISSUE_LABELS = {
   dead:         'Dead Weight',
   snooze:       'High CPH',
   binge_abandon:'Binge & Abandon',
+  low_usage:    'Low Usage',
+  poor_grade:   'Poor Value',
 }
 
 // ── FlaggedCard ───────────────────────────────────────────────────────────────
@@ -293,6 +298,14 @@ export default function FlaggedView({ subscriptions, profile, sweptSubIds = new 
 
       if (isBingeAndAbandon(sub.usageLogs) && !issues.includes('dead'))
         issues.push('binge_abandon')
+
+      if (hasChronicLowUsage(sub.usageLogs) && !issues.includes('dead') && !issues.includes('binge_abandon'))
+        issues.push('low_usage')
+
+      // Poor grade = bottom 20th percentile by value score, not already caught above
+      if (grade.label === 'Poor' && !issues.includes('dead') && !issues.includes('snooze') &&
+          !issues.includes('binge_abandon') && !issues.includes('low_usage'))
+        issues.push('poor_grade')
 
       return { ...sub, issues }
     }).filter(sub => sub.issues.length > 0)

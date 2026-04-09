@@ -1119,12 +1119,17 @@ function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSno
           {swept ? (
             <span className="badge mt-1 badge-emerald">Invested ✓</span>
           ) : (
-            <span className={clsx(
-              'badge mt-1',
-              sub.dead ? 'badge-rose' : sub.snooze ? 'badge-amber' : GRADE_STYLES[sub.grade?.label] ?? 'badge-violet'
-            )}>
-              {sub.dead ? 'Dead Weight' : sub.snooze ? 'Snooze?' : sub.grade?.label ?? 'OK'}
-            </span>
+            <div className="flex flex-col items-end gap-0.5 mt-1">
+              <span className={clsx(
+                'badge',
+                sub.dead ? 'badge-rose' : sub.snooze ? 'badge-amber' : GRADE_STYLES[sub.grade?.label] ?? 'badge-violet'
+              )}>
+                {sub.dead ? 'Dead Weight' : sub.snooze ? 'Snooze?' : sub.grade?.label ?? 'OK'}
+              </span>
+              {sub.dead && sub.snooze && (
+                <span className="badge badge-amber">Snooze?</span>
+              )}
+            </div>
           )}
         </div>
       </div>
