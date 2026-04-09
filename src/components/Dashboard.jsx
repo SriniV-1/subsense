@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import RoutingModal from './RoutingModal.jsx'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -21,6 +21,12 @@ import { format, parseISO } from 'date-fns'
 import clsx from 'clsx'
 
 const BAR_COLORS = ['#a855f7','#ec4899','#f97316','#10b981','#0ea5e9','#f59e0b','#6366f1','#14b8a6']
+
+function projectedValue(monthlyAmount, years = 10) {
+  const r = 0.10 / 12
+  const n = years * 12
+  return monthlyAmount * ((Math.pow(1 + r, n) - 1) / r)
+}
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
@@ -710,6 +716,71 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
         </div>
       )}
 
+      {/* Investment teaser — visible when investments exist or dead weight is present */}
+      {investments.length > 0 ? (
+        <div className="card p-5 stagger-child" style={{ animationDelay: '0.23s' }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mb-1">Portfolio</p>
+              <p className="text-xs text-gray-500 font-medium">
+                {investments.length} subscription{investments.length > 1 ? 's' : ''} redirected ·{' '}
+                <span className="font-mono font-bold text-gray-700">${investments.reduce((s, inv) => s + inv.monthlyCost, 0).toFixed(2)}/mo</span>
+              </p>
+            </div>
+            <Link
+              to="/investments"
+              className="shrink-0 text-xs font-bold text-indigo-500 hover:text-indigo-700 transition-colors"
+            >
+              View →
+            </Link>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[1, 5, 10].map(years => {
+              const monthly = investments.reduce((s, inv) => s + inv.monthlyCost, 0)
+              const pv = projectedValue(monthly, years)
+              return (
+                <div key={years} className="rounded-xl bg-violet-50 border border-violet-100 p-2.5 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-violet-400">{years}yr</p>
+                  <p className="text-sm font-black font-mono text-emerald-600 mt-0.5">
+                    ${Math.round(pv).toLocaleString()}
+                  </p>
+                  <p className="text-[9px] text-gray-400 font-mono">
+                    −${Math.round(monthly * 12 * years).toLocaleString()} spent
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : deadCount > 0 ? (
+        <div className="card p-5 stagger-child border-rose-100" style={{ animationDelay: '0.23s' }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-rose-400 mb-1">Dead Weight — Investment Potential</p>
+              <p className="text-xs text-gray-500 font-medium">
+                <span className="font-mono font-bold text-gray-700">${reclaimable.toFixed(2)}/mo</span> redirectable from {deadCount} unused subscription{deadCount > 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[1, 5, 10].map(years => {
+              const pv = projectedValue(reclaimable, years)
+              return (
+                <div key={years} className="rounded-xl bg-rose-50 border border-rose-100 p-2.5 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-rose-400">{years}yr</p>
+                  <p className="text-sm font-black font-mono text-gray-700 mt-0.5">
+                    ${Math.round(pv).toLocaleString()}
+                  </p>
+                  <p className="text-[9px] text-gray-400 font-mono">
+                    at 10% avg annual
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
       {/* Value Score chart — bars are clickable */}
       <div className="card p-6 stagger-child" style={{ animationDelay: '0.25s' }}>
         <div className="flex items-center gap-2 mb-1">
@@ -753,27 +824,42 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
           <h3 className="text-xs font-bold uppercase tracking-widest text-violet-400">
             Active Subscriptions — click to inspect
           </h3>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {[
-              { key: 'default',     label: 'Default' },
-              { key: 'cph-high',    label: '$/hr ↑' },
-              { key: 'cph-low',     label: '$/hr ↓' },
-              { key: 'grade-best',  label: 'Grade ↑' },
-              { key: 'grade-worst', label: 'Grade ↓' },
-            ].map(opt => (
-              <button
-                key={opt.key}
-                onClick={() => setSubSort(opt.key)}
-                className={clsx(
-                  'px-3 py-1 rounded-xl text-xs font-semibold font-display transition-all duration-150',
-                  subSort === opt.key
-                    ? 'bg-violet-100 text-violet-700'
-                    : 'text-gray-400 hover:bg-violet-50 hover:text-violet-500'
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Batch snooze dead weight */}
+            {(() => {
+              const unsweptDead = activeSubs.filter(s => s.dead || s.grade?.label === 'Dead Weight')
+              if (unsweptDead.length === 0 || !onSnooze) return null
+              return (
+                <button
+                  onClick={() => unsweptDead.forEach(s => onSnooze(s.id))}
+                  className="px-3 py-1 rounded-xl text-xs font-semibold font-display border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 transition-all duration-150"
+                >
+                  Snooze All Dead Weight ({unsweptDead.length}) · ${unsweptDead.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo
+                </button>
+              )
+            })()}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { key: 'default',     label: 'Default' },
+                { key: 'cph-high',    label: '$/hr ↑' },
+                { key: 'cph-low',     label: '$/hr ↓' },
+                { key: 'grade-best',  label: 'Grade ↑' },
+                { key: 'grade-worst', label: 'Grade ↓' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setSubSort(opt.key)}
+                  className={clsx(
+                    'px-3 py-1 rounded-xl text-xs font-semibold font-display transition-all duration-150',
+                    subSort === opt.key
+                      ? 'bg-violet-100 text-violet-700'
+                      : 'text-gray-400 hover:bg-violet-50 hover:text-violet-500'
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

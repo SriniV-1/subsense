@@ -8,6 +8,7 @@ import AISentinel from './components/AISentinel.jsx'
 import InvestmentTracker from './components/InvestmentTracker.jsx'
 import FlaggedView from './components/FlaggedView.jsx'
 import RenewalCalendar from './components/RenewalCalendar.jsx'
+import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx'
 import { fetchSubscriptions, fetchProfile } from './api/subscriptions.js'
 import { subscriptions as mockSubs, userProfile as mockProfile } from './data/mockData.js'
 import { dropRecentUsage } from './data/generateUsage.js'
@@ -22,6 +23,7 @@ export default function App() {
   // ── Centralized investment state (shared across Dashboard, Sentinel, Tracker) ──
   const [investments, setInvestments] = useState([])
   const [snoozedIds,  setSnoozedIds]  = useState(new Set())
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   function addInvestment(sub, trade) {
     setInvestments(prev => {
@@ -57,7 +59,10 @@ export default function App() {
         setSubscriptions(mockSubs)
         setProfile(mockProfile)
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+        setShowOnboarding(shouldShowOnboarding())
+      })
   }, [])
 
   const displayedSubs = subscriptions.map((sub) => {
@@ -75,6 +80,16 @@ export default function App() {
   }
 
   if (loading) return <LoadingScreen />
+
+  if (showOnboarding && displayedSubs.length > 0 && profile) {
+    return (
+      <Onboarding
+        subscriptions={displayedSubs}
+        profile={profile}
+        onDone={() => setShowOnboarding(false)}
+      />
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">

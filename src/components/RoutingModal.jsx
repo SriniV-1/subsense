@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { X, TrendingUp, Building2, Zap } from 'lucide-react'
 import { snoozeAndSweep } from '../api/subscriptions.js'
 import clsx from 'clsx'
+import confetti from 'canvas-confetti'
 
 // ── Index fund pools ──────────────────────────────────────────────────────────
 
@@ -123,6 +124,16 @@ export default function RoutingModal({ subscription, onClose, onInvest }) {
   const projection    = projectedValue(monthlyCost).toFixed(0)
   const selectedTicker = TICKERS.find(t => t.value === ticker)
 
+  function fireConfetti() {
+    const end = Date.now() + 1800
+    const colors = ['#7c3aed', '#a855f7', '#ec4899', '#10b981', '#6366f1']
+    ;(function frame() {
+      confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 }, colors })
+      confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors })
+      if (Date.now() < end) requestAnimationFrame(frame)
+    })()
+  }
+
   async function handleRoute() {
     setPhase('loading')
     try {
@@ -134,12 +145,14 @@ export default function RoutingModal({ subscription, onClose, onInvest }) {
       setTrade(t)
       setPhase('success')
       onInvest?.(subscription, t)
+      fireConfetti()
     } catch {
       await new Promise(res => setTimeout(res, 1500))
       const local = mockTrade(monthlyCost, ticker)
       setTrade(local)
       setPhase('success')
       onInvest?.(subscription, local)
+      fireConfetti()
     }
   }
 
@@ -157,6 +170,7 @@ export default function RoutingModal({ subscription, onClose, onInvest }) {
     setTrade(t)
     setPhase('success')
     onInvest?.(subscription, t)
+    fireConfetti()
   }
 
   return createPortal(
