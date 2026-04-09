@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, Link } from 'react-router-dom'
 import RoutingModal from './RoutingModal.jsx'
+import BatchActionModal from './BatchActionModal.jsx'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, ReferenceLine,
@@ -337,6 +338,7 @@ function KPIDetailModal({ type, enriched, profile, spend, avgCPH, onClose }) {
 export default function Dashboard({ subscriptions, profile, sweptSubIds = new Set(), investments = [], onInvest, onSnooze }) {
   const normalizedScores = useMemo(() => normalizeScores(subscriptions), [subscriptions])
   const [sweepTarget,    setSweepTarget]    = useState(null)
+  const [batchTarget,    setBatchTarget]    = useState(null)   // array of dead-weight subs for batch modal
   const [detailSub,      setDetailSub]      = useState(null)
   const [kpiDetail,      setKpiDetail]      = useState(null)
   const [portfolioData,  setPortfolioData]  = useState(null)
@@ -825,16 +827,16 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
             Active Subscriptions — click to inspect
           </h3>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Batch snooze dead weight */}
+            {/* Batch action — dead weight */}
             {(() => {
               const unsweptDead = activeSubs.filter(s => s.dead || s.grade?.label === 'Dead Weight')
-              if (unsweptDead.length === 0 || !onSnooze) return null
+              if (unsweptDead.length === 0) return null
               return (
                 <button
-                  onClick={() => unsweptDead.forEach(s => onSnooze(s.id))}
+                  onClick={() => setBatchTarget(unsweptDead)}
                   className="px-3 py-1 rounded-xl text-xs font-semibold font-display border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 transition-all duration-150"
                 >
-                  Snooze All Dead Weight ({unsweptDead.length}) · ${unsweptDead.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo
+                  Handle All Dead Weight ({unsweptDead.length}) · ${unsweptDead.reduce((s, x) => s + x.monthlyCost, 0).toFixed(2)}/mo
                 </button>
               )
             })()}
@@ -910,6 +912,16 @@ export default function Dashboard({ subscriptions, profile, sweptSubIds = new Se
           subscription={sweepTarget}
           onClose={() => setSweepTarget(null)}
           onInvest={onInvest}
+        />
+      )}
+
+      {/* Batch action modal */}
+      {batchTarget && (
+        <BatchActionModal
+          subs={batchTarget}
+          onSnooze={onSnooze}
+          onInvest={onInvest}
+          onClose={() => setBatchTarget(null)}
         />
       )}
 
@@ -991,15 +1003,32 @@ const GRADE_STYLES = {
 }
 
 function HandledSection({ subs, investmentMap, onOpenDetail }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
+  const investedCount = subs.filter(s => investmentMap[s.id]).length
+  const snoozedCount  = subs.length - investedCount
+  const totalFreed    = subs.reduce((sum, s) => sum + s.monthlyCost, 0)
+
   return (
-    <div className="mt-6">
+    <div className="mt-8 border-t border-violet-100 pt-6">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-violet-500 transition-colors mb-3"
+        className="w-full flex items-center justify-between gap-3 mb-4 group"
       >
-        <ChevronRight className={clsx('w-3.5 h-3.5 transition-transform duration-200', open && 'rotate-90')} />
-        Handled ({subs.length})
+        <div className="flex items-center gap-2">
+          <ChevronRight className={clsx('w-3.5 h-3.5 text-gray-400 transition-transform duration-200 group-hover:text-violet-500', open && 'rotate-90')} />
+          <span className="text-xs font-bold uppercase tracking-widest text-gray-400 group-hover:text-violet-500 transition-colors">
+            Snoozed &amp; Invested ({subs.length})
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-[11px] font-mono">
+          {snoozedCount > 0 && (
+            <span className="text-emerald-600 font-semibold">{snoozedCount} snoozed</span>
+          )}
+          {investedCount > 0 && (
+            <span className="text-violet-600 font-semibold">{investedCount} invested</span>
+          )}
+          <span className="text-gray-400">${totalFreed.toFixed(2)}/mo freed</span>
+        </div>
       </button>
       {open && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
