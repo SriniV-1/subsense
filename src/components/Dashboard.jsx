@@ -1119,17 +1119,12 @@ function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSno
           {swept ? (
             <span className="badge mt-1 badge-emerald">Invested ✓</span>
           ) : (
-            <div className="flex flex-col items-end gap-0.5 mt-1">
-              <span className={clsx(
-                'badge',
-                sub.dead ? 'badge-rose' : sub.snooze ? 'badge-amber' : GRADE_STYLES[sub.grade?.label] ?? 'badge-violet'
-              )}>
-                {sub.dead ? 'Dead Weight' : sub.snooze ? 'Snooze?' : sub.grade?.label ?? 'OK'}
-              </span>
-              {sub.dead && sub.snooze && (
-                <span className="badge badge-amber">Snooze?</span>
-              )}
-            </div>
+            <span className={clsx(
+              'badge mt-1',
+              sub.dead ? 'badge-rose' : sub.snooze ? 'badge-amber' : GRADE_STYLES[sub.grade?.label] ?? 'badge-violet'
+            )}>
+              {sub.dead ? 'Dead Weight' : sub.snooze ? 'Snooze?' : sub.grade?.label ?? 'OK'}
+            </span>
           )}
         </div>
       </div>
@@ -1182,12 +1177,6 @@ function SubscriptionCard({ sub, index, swept, investment, onSnoozeInvest, onSno
         </div>
       ) : isDead ? (
         <div className="mt-3 flex gap-2" onClick={e => e.stopPropagation()}>
-          <button
-            onClick={() => onSnooze?.(sub.id)}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 active:scale-[0.98] bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100"
-          >
-            Snooze
-          </button>
           <button
             onClick={() => onSnoozeInvest(sub)}
             className="relative flex-1 py-2 rounded-xl text-xs font-bold tracking-wide transition-all duration-200 group overflow-hidden active:scale-[0.98]"
